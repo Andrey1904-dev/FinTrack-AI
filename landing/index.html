@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinTrack AI — трекер личных финансов, который не теряет данные</title>
+<meta name="description" content="FinTrack AI — бесплатный трекер личных финансов в рублях: расходы, бюджеты, цели, кредиты, аналитика и Telegram-бот. Работает офлайн, данные — в вашем аккаунте.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FinTrack AI">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="FinTrack AI — умные личные финансы">
+<meta property="og:description" content="Учёт расходов, бюджеты, цели, кредиты и финансовый ассистент в Telegram.">
+<meta name="theme-color" content="#070b16">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<style>
+/* Лендинг полностью автономен: ни внешних шрифтов, ни картинок, ни скриптов.
+   Поэтому страница открывается даже без интернета. */
+:root{
+  --bg:#070b16; --panel:#101c31; --panel-2:#0c1526; --line:rgba(255,255,255,.09);
+  --text:#f3f6ff; --muted:#93a2c2; --blue:#6681ff; --cyan:#45d7ff; --green:#37e0a4;
+  --violet:#9b5cff; --pink:#ff719f; --yellow:#f6c76b;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; color:var(--text); background:
+    radial-gradient(900px 520px at 82% -12%, rgba(56,74,176,.30), transparent),
+    radial-gradient(680px 520px at -12% 46%, rgba(10,106,112,.22), transparent),
+    var(--bg);
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{width:min(1060px,92vw);margin:0 auto}
+a{color:var(--cyan)}
+.btn{
+  display:inline-block;padding:13px 22px;border-radius:14px;border:1px solid var(--line);
+  background:rgba(255,255,255,.05);color:var(--text);text-decoration:none;font-weight:600;cursor:pointer;
+  transition:transform .15s ease, background .15s ease;
+}
+.btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.09)}
+.btn.primary{background:linear-gradient(135deg,var(--blue),#4f6ef7);border-color:transparent;box-shadow:0 10px 30px rgba(79,110,247,.35)}
+.btn.primary:hover{background:linear-gradient(135deg,#7b93ff,#5c7bff)}
+.btn.ghost{background:transparent}
+header{padding:22px 0;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:19px;text-decoration:none;color:var(--text)}
+.logo{
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));color:#08101f;font-weight:900;
+}
+.brand small{display:block;font-size:10px;letter-spacing:.14em;color:var(--muted);font-weight:600}
+nav a{color:var(--muted);text-decoration:none;margin-left:18px;font-size:14px}
+nav a:hover{color:var(--text)}
+.hero{padding:64px 0 48px;display:grid;grid-template-columns:1.15fr .85fr;gap:44px;align-items:center}
+@media(max-width:860px){.hero{grid-template-columns:1fr;padding-top:36px}}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;font-size:13px;
+  background:rgba(55,224,164,.12);color:var(--green);border:1px solid rgba(55,224,164,.25);
+}
+h1{font-size:clamp(30px,4.6vw,52px);line-height:1.12;margin:18px 0 14px;letter-spacing:-.02em}
+h1 .grad{background:linear-gradient(90deg,var(--cyan),var(--green));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{color:var(--muted);font-size:18px;margin:0 0 26px;max-width:56ch}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.hint{color:var(--muted);font-size:13px;margin-top:14px}
+/* карточка-превью интерфейса */
+.preview{
+  background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);
+  border-radius:22px;padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.45);transform:rotate(1.2deg);
+}
+.preview .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.preview .muted{color:var(--muted);font-size:12px}
+.preview .big{font-size:30px;font-weight:900;letter-spacing:-1px;margin:8px 0 4px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chip{font-size:12px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line)}
+.chip.ok{color:var(--green)} .chip.bad{color:var(--pink)} .chip.warn{color:var(--yellow)}
+.bars{display:flex;align-items:flex-end;gap:6px;height:90px;margin-top:16px}
+.bars i{flex:1;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,var(--blue),rgba(102,129,255,.15))}
+.bars i.g{background:linear-gradient(180deg,var(--green),rgba(55,224,164,.12))}
+section{padding:44px 0}
+h2{font-size:clamp(24px,3vw,34px);margin:0 0 8px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 26px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:860px){.grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.card{
+  background:linear-gradient(180deg,rgba(18,30,52,.9),rgba(12,20,38,.9));border:1px solid var(--line);
+  border-radius:18px;padding:20px;
+}
+.card .ic{
+  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;margin-bottom:12px;
+  background:rgba(102,129,255,.14);border:1px solid rgba(102,129,255,.3);
+}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--muted);font-size:14px}
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:860px){.steps{grid-template-columns:1fr}}
+.step{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:18px;padding:20px;position:relative}
+.step::before{
+  counter-increment:s;content:counter(s);position:absolute;top:-14px;left:18px;width:30px;height:30px;
+  border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--blue);color:#0a1020;font-size:14px;
+}
+.step h3{margin:6px 0 6px;font-size:16px}
+.step p{margin:0;color:var(--muted);font-size:14px}
+.quote{
+  border-left:3px solid var(--green);padding:6px 0 6px 18px;margin:26px 0 0;color:var(--muted);font-size:15px;
+}
+.quote b{color:var(--text)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:center}
+@media(max-width:860px){.split{grid-template-columns:1fr}}
+ul.checks{list-style:none;padding:0;margin:18px 0 0}
+ul.checks li{padding:9px 0 9px 34px;position:relative;color:var(--muted)}
+ul.checks li::before{
+  content:"✓";position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:8px;
+  display:grid;place-items:center;background:rgba(55,224,164,.15);color:var(--green);font-weight:800;font-size:13px;
+}
+.panel{
+  background:linear-gradient(160deg,rgba(56,74,176,.25),rgba(10,106,112,.15));
+  border:1px solid var(--line);border-radius:24px;padding:34px;text-align:center;
+}
+.panel h2{margin-bottom:10px}
+footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--muted);font-size:13px}
+footer .row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.kbd{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;font-size:12px;background:rgba(255,255,255,.05)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <a class="brand" href="../">
+      <span class="logo">↗</span>
+      <span>FinTrack AI<small>ЛИЧНЫЕ ФИНАНСЫ</small></span>
+    </a>
+    <nav>
+      <a href="#features">Возможности</a>
+      <a href="#how">Как начать</a>
+      <a href="#privacy">Данные</a>
+      <a href="../?demo=1">Демо</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <span class="pill">◉ Бесплатно · офлайн · без рекламы</span>
+      <h1>Личные финансы,<br><span class="grad">которые не теряются</span></h1>
+      <p class="lead">Трекер расходов и доходов в рублях: умный ввод текстом и голосом, бюджеты, цели,
+        кредиты с настоящим графиком, аналитика и Telegram-бот — один аккаунт на всех устройствах.</p>
+      <div class="cta">
+        <a class="btn primary" href="../?demo=1">Посмотреть демо без регистрации</a>
+        <a class="btn" href="../">Создать аккаунт</a>
+      </div>
+      <div class="hint">Демо открывается сразу: 280+ вымышленных операций, кредит с графиком, бюджеты и цели.</div>
+    </div>
+
+    <div class="preview" aria-hidden="true">
+      <div class="row"><span class="muted">Общий баланс · за всё время</span><span class="muted">сегодня</span></div>
+      <div class="big">184 320 ₽</div>
+      <div class="chips">
+        <span class="chip ok">↗ месяц: +12 400 ₽</span>
+        <span class="chip">доходы +6%</span>
+        <span class="chip bad">расходы +3%</span>
+      </div>
+      <div class="bars">
+        <i class="g" style="height:55%"></i><i style="height:38%"></i>
+        <i class="g" style="height:72%"></i><i style="height:48%"></i>
+        <i class="g" style="height:64%"></i><i style="height:30%"></i>
+        <i class="g" style="height:88%"></i><i style="height:52%"></i>
+        <i class="g" style="height:60%"></i><i style="height:41%"></i>
+      </div>
+      <div class="chips">
+        <span class="chip warn">☕ Кафе: осталось 1 200 ₽</span>
+        <span class="chip">📅 До зарплаты: 480 ₽/день</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Всё, что нужно трекеру расходов</h2>
+    <p class="sub">Без подключений к банкам и чужих ключей: вы вводите операции — приложение считает.</p>
+    <div class="grid">
+      <div class="card"><div class="ic">⚡</div><h3>Быстрый ввод словами</h3>
+        <p>«пятёрочка 1200 вчера», «зарплата 80к», «такси 42,50» — сумма, дата и категория распознаются сами. Есть голосовой ввод и фото чека.</p></div>
+      <div class="card"><div class="ic">✂️</div><h3>Разделение операций</h3>
+        <p>Один чек — несколько категорий: супермаркет и кафе в одной покупке. Или дублируйте типовые операции в один клик.</p></div>
+      <div class="card"><div class="ic">◫</div><h3>Бюджеты: месяц и неделя</h3>
+        <p>Лимиты по категориям, остаток, перерасход и предупреждения. Недельные лимиты (пн–вс или вс–сб) считаются отдельно.</p></div>
+      <div class="card"><div class="ic">◎</div><h3>Цели и прогноз</h3>
+        <p>История взносов, прогресс и расчёт даты достижения цели по вашему темпу накоплений.</p></div>
+      <div class="card"><div class="ic">🏦</div><h3>Кредиты и кредитки</h3>
+        <p>Настоящий график платежей: проценты, тело, остаток, досрочное погашение и переплата. Платёж — одна кнопка.</p></div>
+      <div class="card"><div class="ic">↻</div><h3>Регулярные платежи</h3>
+        <p>Подписки и обязательные платежи проводятся одной кнопкой и попадают в «скоро списания» и расчёт «можно тратить в день».</p></div>
+      <div class="card"><div class="ic">📊</div><h3>Аналитика и отчёты</h3>
+        <p>Графики за 6 месяцев, структура расходов, рост категорий, накопительный баланс и отчёт за любой период — копируется в буфер.</p></div>
+      <div class="card"><div class="ic">🔍</div><h3>Поиск и импорт выписок</h3>
+        <p>Ищите по тексту и по сумме. Импорт CSV любого банка с автоопределением колонок, предпросмотром и защитой от дублей.</p></div>
+      <div class="card"><div class="ic">🙈</div><h3>Приватный режим</h3>
+        <p>Одна кнопка — и все суммы в интерфейсе превращаются в точки. Удобно в транспорте и на экране проектора.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>Как начать за 3 шага</h2>
+    <p class="sub">Пять минут — и у вас работает собственный трекер.</p>
+    <div class="steps">
+      <div class="step"><h3>Посмотрите демо</h3>
+        <p>Откройте демо-режим без регистрации: внутри год вымышленных операций, кредит, карты, бюджеты и цели.</p></div>
+      <div class="step"><h3>Создайте аккаунт</h3>
+        <p>Почта и пароль — данные хранятся в вашем Supabase с изоляцией по строкам (RLS). Ключ в коде публичный и секретов не содержит.</p></div>
+      <div class="step"><h3>Ведите по-своему</h3>
+        <p>Добавляйте операции текстом, голосом или формой, настраивайте категории и правила — бот в Telegram использует их же.</p></div>
+    </div>
+    <div class="quote"><b>Почему это не теряется:</b> запись идёт точечно и в очередь; без интернета приложение работает
+      и синхронизируется сама; если облако не загрузилось — запись блокируется, а не затирает историю.
+      Плюс архив всей истории одним ZIP и ночная выгрузка базы.</div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap split">
+    <div>
+      <h2>Ваши данные — ваши</h2>
+      <ul class="checks">
+        <li>Учёт только в рублях: суммы и итоги никогда не смешиваются.</li>
+        <li>Строки защищены RLS — чужой аккаунт не прочитает вашу историю.</li>
+        <li>Работает офлайн: сервис-воркер кэширует приложение, изменения уходят в облако сами.</li>
+        <li>Экспорт всегда доступен: JSON, CSV и ZIP-архив с инструкцией по восстановлению.</li>
+        <li>Удаление аккаунта — одной кнопкой, вместе со всеми данными.</li>
+        <li>Журнал диагностики: видно, что именно пошло не так, без «чёрного ящика».</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Горячие клавиши — ввод без мыши</h3>
+      <ul class="checks" style="margin-top:8px">
+        <li><span class="kbd">N</span> — новая операция из любого раздела</li>
+        <li><span class="kbd">/</span> — поиск по описанию и сумме</li>
+        <li><span class="kbd">Esc</span> — закрыть окно</li>
+        <li><span class="kbd">?</span> — справка по всем клавишам</li>
+      </ul>
+      <p class="hint">А ещё: светлая и тёмная темы, PWA-ярлыки, «до зарплаты», календарь платежей и счёта с остатками.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="panel">
+      <h2>Попробуйте прямо сейчас</h2>
+      <p class="sub" style="margin-bottom:22px">Демо открывается без регистрации и не требует установки — работает даже как обычный файл.</p>
+      <div class="cta" style="justify-content:center">
+        <a class="btn primary" href="../?demo=1">Открыть демо</a>
+        <a class="btn ghost" href="../">Зарегистрироваться</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <span>FinTrack AI · трекер личных финансов · открытый исходный код</span>
+    <span><a href="../?demo=1">Демо</a> · <a href="../">Приложение</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

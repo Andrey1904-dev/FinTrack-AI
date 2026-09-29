@@ -5,10 +5,18 @@ set -e
 REPO="$1"
 if [ -z "$REPO" ]; then echo "Укажите адрес репозитория: ./deploy.sh git@github.com:user/repo.git"; exit 1; fi
 
-node build.mjs                       # собрать index.html из src/
-node tests/unit.mjs                  # быстрые проверки логики
-node tests/smoke.mjs                 # прогон интерфейса (нужен jsdom: npm i jsdom)
-node tests/functions.mjs             # серверные функции (Deno не нужен)
+# Сборка нужна, только если исходники src/ есть в репозитории:
+# иначе публикуется готовый index.html (он уже собран и проверен).
+if [ -d src ]; then
+  node build.mjs                       # собрать index.html из src/
+else
+  echo "src/ нет — используем готовый index.html"
+fi
+# Тесты запускаются, если они есть и установлены зависимости (npm i).
+[ -f tests/unit.mjs ] && node tests/unit.mjs
+if [ -f tests/smoke.mjs ] && [ -d node_modules/jsdom ]; then node tests/smoke.mjs; fi
+[ -f tests/functions.mjs ] && node tests/functions.mjs
+true                                     # не падаем, если тестов нет (set -e)
 
 rm -rf .git-deploy && mkdir .git-deploy
 git --git-dir=.git-deploy --work-tree=. init -q

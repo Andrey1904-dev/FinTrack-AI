@@ -407,6 +407,7 @@ try{
       <div class="row gap8 wrap">
         <span class="tag" id="accountLine"></span>
         <span class="tag blue" id="monthLabel"></span>
+        <button class="btn ghost" data-act="stealth-toggle" id="stealthBtn" title="Скрыть суммы" aria-label="Скрыть суммы">👁</button>
         <button class="btn primary" data-act="op-new">＋ Операция</button>
       </div>
     </header>
@@ -706,7 +707,9 @@ function normalizeCard(c){
 /* ---------- периоды бюджетов ---------- */
 function weekRangeISO(dateISO){
   const base = fromISO(dateISO || today());
-  const dow = (base.getDay() + 6) % 7;                       // 0 = понедельник
+  // первый день недели выбирается в настройках: 1 — понедельник (по умолчанию), 0 — воскресенье
+  const weekStart = (S.settings && num(S.settings.weekStart) === 0) ? 0 : 1;
+  const dow = weekStart === 0 ? base.getDay() : (base.getDay() + 6) % 7;   // 0 = первый день недели
   const from = addDaysISO(toISO(base), -dow);
   return { from, to: addDaysISO(from, 6), label: 'неделя ' + fmtDateShort(from) + '–' + fmtDateShort(addDaysISO(from, 6)) };
 }
@@ -1016,6 +1019,7 @@ function payNextCreditPayment(id){
   if (!c) return null;
   const p = nextUnpaidPayment(c);
   if (!p) return { nothing: true };
+  if (writesBlocked()) return null;                      // запись в облако заблокирована — ничего не меняем
   p.paid = true; p.paidAt = new Date().toISOString();
   const op = upsertOp({
     id: uid('op'), type: 'expense', amount: p.amount,
@@ -1023,6 +1027,7 @@ function payNextCreditPayment(id){
     note: 'Платёж по кредиту · ' + c.bank + (c.purpose ? ' (' + c.purpose + ')' : ''),
     date: additionDate(p.date), source: 'credit'
   });
+  if (!op){ p.paid = false; p.paidAt = null; return null; }   // страховка: раз запись не удалась — откатываем отметку
   p.operationId = op.id;
   const nxt = nextUnpaidPayment(c);
   c.paymentDate = nxt ? nxt.date : p.date;
@@ -1037,6 +1042,7 @@ function additionDate(iso){ return isValidISO(iso) && iso > today() ? today() : 
 function repayCreditEarly(id, amount){
   const c = S.credits.find(x => String(x.id) === String(id));
   if (!c) return null;
+  if (writesBlocked()) return null;                      // не меняем график, пока облако недоступно
   const value = round2(num(amount));
   if (value <= 0) return null;
   const remaining = creditRemaining(c);
@@ -1088,11 +1094,13 @@ function payCard(id, amount){
   if (!c) return null;
   const pay = Math.min(round2(num(amount)), num(c.used));
   if (pay <= 0) return null;
+  if (writesBlocked()) return null;                      // не уменьшаем долг без операции
   const op = upsertOp({
     id: uid('op'), type: 'expense', amount: pay,
     category: S.categorySets.expense.includes('Кредиты') ? 'Кредиты' : 'Другое',
     note: 'Погашение кредитки · ' + c.bank + (c.name ? ' (' + c.name + ')' : ''), date: today(), source: 'card'
   });
+  if (!op) return null;
   c.used = round2(num(c.used) - pay);
   c.lastPaymentAmount = pay; c.lastPaymentAt = new Date().toISOString();
   if (c.used <= 0) c.paymentDate = addMonthsISO(c.paymentDate, 1);
@@ -1432,15 +1440,25 @@ function chartLine(cfg){
   const labels = cfg.labels || [], series = cfg.series || [], h = cfg.height || 240;
   const w = 720, padL = 54, padR = 12, padT = 14, padB = 26;
   const iw = w - padL - padR, ih = h - padT - padB;
-  const max = niceMax(Math.max(1, ...series.flatMap(s => s.data.map(v => num(v)))));
+  // Шкала умеет и с отрицательными значениями (например, накопительный баланс в минусе)
+  const vals = series.flatMap(s => s.data.map(v => num(v)));
+  const max = niceMax(Math.max(1, ...vals));
+  const minRaw = Math.min(0, ...vals);
+  const lo = minRaw < 0 ? -niceMax(Math.abs(minRaw)) : 0;
+  const span = (max - lo) || 1;
   const x = i => padL + (labels.length <= 1 ? iw / 2 : i * iw / (labels.length - 1));
-  const y = v => padT + ih - (num(v) / max) * ih;
+  const y = v => padT + ih - ((num(v) - lo) / span) * ih;
   const theme = chartVars();
+  const axisLabel = v => Math.abs(v) >= 1000 ? (v / 1000).toFixed(Math.abs(v) % 1000 >= 100 ? 1 : 0).replace('.', ',') + 'к' : v.toFixed(0);
   let grid = '';
   for (let g = 0; g <= 4; g++){
-    const val = max * g / 4, yy = y(val);
+    const val = lo + span * g / 4, yy = y(val);
     grid += `<line x1="${padL}" x2="${w - padR}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="${theme.grid}"/>`
-         + `<text x="${padL - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end" fill="${theme.text}" font-size="10">${val >= 1000 ? (val / 1000).toFixed(val % 1000 ? 1 : 0) + 'к' : val.toFixed(0)}</text>`;
+         + `<text x="${padL - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end" fill="${theme.text}" font-size="10">${axisLabel(val)}</text>`;
+  }
+  if (lo < 0){   // линия нуля заметнее сетки: ниже — минус
+    const y0 = y(0);
+    grid += `<line x1="${padL}" x2="${w - padR}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" stroke="${theme.text}" stroke-width="1.2" stroke-dasharray="4 4" opacity=".7"/>`;
   }
   let body = '';
   series.forEach(s => {
@@ -2029,6 +2047,8 @@ function opRow(o){
     <div class="amount ${income ? 'income' : 'expense'} mono">${income ? '+' : '−'}${money(o.amount).replace('−', '')}</div>
     <div class="row gap4">
       <button class="btn icon ghost" data-act="op-edit" data-id="${escapeAttr(o.id)}" title="Изменить" aria-label="Изменить операцию">✎</button>
+      <button class="btn icon ghost" data-act="op-duplicate" data-id="${escapeAttr(o.id)}" title="Дублировать на сегодня" aria-label="Дублировать операцию">⧉</button>
+      <button class="btn icon ghost" data-act="op-split" data-id="${escapeAttr(o.id)}" title="Разделить на части" aria-label="Разделить операцию на части">✂</button>
       <button class="btn icon ghost" data-act="op-delete" data-id="${escapeAttr(o.id)}" title="Удалить" aria-label="Удалить операцию">✕</button>
     </div>
   </div>`;
@@ -2076,6 +2096,8 @@ function renderTopbar(){
   const el = $('accountLine');
   if (el) el.textContent = S.demo ? 'Демо-режим' : ((S.user && S.user.email) || '');
   const ml = $('monthLabel'); if (ml) ml.textContent = fmtMonth(thisMonthKey());
+  const sb = $('stealthBtn');
+  if (sb){ const on = stealthOn(); sb.textContent = on ? '🙈' : '👁'; sb.title = on ? 'Показать суммы' : 'Скрыть суммы'; sb.setAttribute('aria-label', sb.title); }
   const tl = $('todayLabel'); if (tl) tl.textContent = fromISO(today()).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 function renderBanner(){
@@ -2269,7 +2291,7 @@ VIEWS.operations = function(){
       </div>
     </div>
     <div class="form-grid mt12">
-      <div><label class="label" for="opQuery">Поиск по описанию</label><input id="opQuery" class="field" value="${escapeAttr(f.opQuery)}" data-inp="op-filter" placeholder="пятёрочка, такси…"></div>
+      <div><label class="label" for="opQuery">Поиск по описанию или сумме</label><input id="opQuery" class="field" value="${escapeAttr(f.opQuery)}" data-inp="op-filter" placeholder="пятёрочка, такси… или 450"></div>
       <div><label class="label" for="opType">Тип</label><select id="opType" class="field" data-inp="op-filter">
         <option value="all"${f.opType === 'all' ? ' selected' : ''}>Все</option>
         <option value="expense"${f.opType === 'expense' ? ' selected' : ''}>Расходы</option>
@@ -2304,11 +2326,15 @@ function opsResultHtml(){
 function renderOpsResult(){ const host = $('opResult'); if (host) host.innerHTML = opsResultHtml(); }
 function filteredOps(){
   const f = S.view, q = (f.opQuery || '').toLowerCase().trim();
+  // Ищем и по тексту, и по сумме: «450» или «такси 450» находит операции с этой суммой
+  const qAmounts = (q.match(/\d+(?:[.,]\d+)?/g) || []).map(x => num(x.replace(',', '.'))).filter(x => x > 0);
+  const qNum = qAmounts.length ? qAmounts : null;
   return S.ops.filter(o =>
     (f.opType === 'all' || o.type === f.opType) &&
     (f.opCategory === 'all' || o.category === f.opCategory) &&
     (f.opMonth === 'all' || monthKey(o.date) === f.opMonth) &&
-    (!q || (o.note + ' ' + o.category).toLowerCase().includes(q))
+    (!q || (o.note + ' ' + o.category).toLowerCase().includes(q) ||
+      (qNum && qNum.some(v => Math.abs(num(o.amount) - v) < 0.005)))
   );
 }
 
@@ -2326,10 +2352,14 @@ VIEWS.analytics = function(){
   }).filter(d => d.value > 0);
   const topOps = S.ops.filter(o => monthKey(o.date) === key && o.type === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 5);
   const growth = topGrowingCategories(key);
-  const dailyAvg = st.expense / Math.max(1, Math.min(fromISO(key + '-01').getMonth() === new Date().getMonth() ? fromISO(today()).getDate() : 30, daysInMonth(key)));
+  const keyDate = fromISO(key + '-01'), nowDate = new Date();
+  const isCurrentMonth = keyDate.getFullYear() === nowDate.getFullYear() && keyDate.getMonth() === nowDate.getMonth();
+  const avgDays = isCurrentMonth ? fromISO(today()).getDate() : daysInMonth(key);
+  const dailyAvg = st.expense / Math.max(1, avgDays);
   const dExp = prev.expense ? Math.round((st.expense - prev.expense) / prev.expense * 100) : null;
   const dInc = prev.income ? Math.round((st.income - prev.income) / prev.income * 100) : null;
   const months = [...new Set([thisMonthKey(), ...S.ops.map(o => monthKey(o.date))])].sort().reverse();
+  const balS = balanceSeries(12);
   return `
   <div class="card pad">
     <div class="row between wrap gap8">
@@ -2382,8 +2412,79 @@ VIEWS.analytics = function(){
   ${growth.length ? `<div class="card pad mt24"><div class="section-title">Что выросло к прошлому месяцу</div>
     <div class="list mt8">${growth.slice(0, 6).map(g => `<div class="item">
       <div class="grow"><div class="bold">${escapeHtml(g.category)}</div><div class="muted small">было ${money(g.was)} → стало ${money(g.now)}</div></div>
-      <span class="tag bad">+${g.delta}%</span><span class="amount mono">${money(g.now - g.was)}</span></div>`).join('')}</div></div>` : ''}`;
+      <span class="tag bad">+${g.delta}%</span><span class="amount mono">${money(g.now - g.was)}</span></div>`).join('')}</div></div>` : ''}
+
+  <div class="card pad mt24">
+    <div class="row between wrap gap8">
+      <div><div class="section-title">Накопительный баланс</div>
+        <div class="muted small mt4">Весь доход минус весь расход на конец каждого месяца — как меняется благосостояние</div></div>
+    </div>
+    <div class="mt12">${chartLine({ labels: balS.map(b => b.label), height: 230, series: [
+      { id: 'bal', name: 'Баланс', color: '#6681ff', data: balS.map(b => b.value) }] })}</div>
+  </div>
+
+  ${periodReportHtml()}`;
 };
+
+/* Накопительный баланс: весь доход − весь расход на конец каждого месяца. */
+function balanceSeries(months){
+  const keys = monthRangeBack(months || 12);
+  return keys.map(k => {
+    const end = k + '-' + pad2(daysInMonth(k));
+    let v = 0;
+    for (const o of S.ops){ if (o.date > end) continue; v += o.type === 'income' ? num(o.amount) : -num(o.amount); }
+    return { key: k, label: fmtMonthShort(k), value: round2(v) };
+  });
+}
+
+/* ---------- отчёт за произвольный период ---------- */
+function periodRange(){
+  const key = S.view.analyticsMonth || thisMonthKey();
+  const from = isValidISO(S.view.repFrom) ? S.view.repFrom : (key + '-01');
+  const to = isValidISO(S.view.repTo) ? S.view.repTo : (key === thisMonthKey() ? today() : key + '-' + pad2(daysInMonth(key)));
+  return from <= to ? { key, from, to } : { key, from: to, to: from };
+}
+function periodStats(from, to){
+  const ops = S.ops.filter(o => o.date >= from && o.date <= to);
+  const inc = sumMoney(ops.filter(o => o.type === 'income'), o => o.amount);
+  const exp = sumMoney(ops.filter(o => o.type === 'expense'), o => o.amount);
+  const days = Math.max(1, Math.round((fromISO(to) - fromISO(from)) / 86400000) + 1);
+  const map = new Map();
+  for (const o of ops){ if (o.type !== 'expense') continue; map.set(o.category, round2((map.get(o.category) || 0) + num(o.amount))); }
+  const byCat = [...map.entries()].map(([category, value]) => ({ category, value })).sort((a, b) => b.value - a.value);
+  // предыдущий период той же длины — для честного сравнения
+  const prevTo = addDaysISO(from, -1), prevFrom = addDaysISO(from, -days);
+  let prevExp = 0;
+  for (const o of S.ops){ if (o.type === 'expense' && o.date >= prevFrom && o.date <= prevTo) prevExp += num(o.amount); }
+  return { ops, inc, exp, balance: round2(inc - exp), days, byCat, prevFrom, prevTo, prevExp: round2(prevExp) };
+}
+function periodReportHtml(){
+  const r = periodRange(), st = periodStats(r.from, r.to);
+  const delta = st.prevExp ? Math.round((st.exp - st.prevExp) / st.prevExp * 100) : null;
+  const top = st.byCat.slice(0, 6);
+  return `
+  <div class="card pad mt24">
+    <div class="row between wrap gap8">
+      <div><div class="section-title">Отчёт за период</div>
+        <div class="muted small mt4">Любой диапазон дат: доходы, расходы и итог за него плюс сравнение с прошлым периодом такой же длины.</div></div>
+      <button class="btn sm" data-act="rep-copy">Скопировать отчёт</button>
+    </div>
+    <div class="form-grid mt12">
+      <div><label class="label" for="repFrom">С</label><input id="repFrom" type="date" class="field" value="${escapeAttr(r.from)}" data-inp="rep-range" aria-label="Начало периода"></div>
+      <div><label class="label" for="repTo">По</label><input id="repTo" type="date" class="field" value="${escapeAttr(r.to)}" data-inp="rep-range" aria-label="Конец периода"></div>
+    </div>
+    <div class="grid g4 mt16">
+      ${metric('Доходы', money(st.inc), st.ops.length + ' ' + plural(st.ops.length, 'операция', 'операции', 'операций'), 'income')}
+      ${metric('Расходы', money(st.exp), delta === null ? 'нет прошлого периода для сравнения' : (delta >= 0 ? '+' : '') + delta + '% к ' + fmtDateShort(st.prevFrom) + '–' + fmtDateShort(st.prevTo), delta !== null && delta > 0 ? 'expense' : '')}
+      ${metric('Итог за период', money(st.balance), st.balance >= 0 ? 'в плюсе' : 'в минусе', st.balance >= 0 ? 'income' : 'expense')}
+      ${metric('В среднем в день', money(round2(st.exp / st.days)), st.days + ' ' + plural(st.days, 'день', 'дня', 'дней'))}
+    </div>
+    ${top.length ? `<div class="divider"></div><div class="muted tiny">РАСХОДЫ ПО КАТЕГОРИЯМ ЗА ПЕРИОД</div>
+      <table class="table mt8"><thead><tr><th>Категория</th><th>Сумма</th><th>Доля</th></tr></thead><tbody>
+        ${top.map(c => `<tr><td>${escapeHtml(c.category)}</td><td class="mono">${money(c.value)}</td><td class="mono">${percent(c.value, st.exp)}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="muted small mt12">За выбранный период расходов нет — измените даты.</div>'}
+  </div>`;
+}
 
 ;
 /* ===== src/views2.js ===== */
@@ -2415,6 +2516,7 @@ VIEWS.budgets = function(){
       ${metric('Осталось', money(round2(totalLimit - totalSpent)), totalSpent > totalLimit ? 'превышено на ' + money(totalSpent - totalLimit) : 'можно тратить')}
       ${metric('Проблемных категорий', String(over.length), over.length ? over.map(b => b.category).slice(0, 3).join(', ') : 'всё в пределах лимитов')}
     </div>
+    ${budgetRolloverHtml(prevKey)}
     ${(over.length || near.length) ? `<div class="banner mt16">${over.length ? '🔴 Превышены лимиты: ' + over.map(b => escapeHtml(b.category)).join(', ') + '. ' : ''}${near.length ? '🟡 Близко к лимиту: ' + near.map(b => escapeHtml(b.category)).join(', ') + '.' : ''}</div>` : ''}
   </div>
   <div class="card pad mt24">
@@ -2438,6 +2540,19 @@ VIEWS.budgets = function(){
     }).join('') : empty('◫', 'Лимитов пока нет', 'Добавьте лимит на категорию — приложение покажет, сколько осталось и предупредит о перерасходе.')}</div>
   </div>`;
 };
+
+/* Остатки прошлого месяца: приложение не переносит их в лимиты автоматически,
+   но честно показывает, сколько «не потрачено» — самая частая просьба в отзывах. */
+function budgetRolloverHtml(prevKey){
+  const rows = budgetsList().filter(b => b.period !== 'weekly').map(b => {
+    const spentPrev = spentInRange(b.category, monthRangeISO(prevKey));
+    return { category: b.category, left: round2(num(b.limit) - spentPrev) };
+  }).filter(x => Math.abs(x.left) >= 100).slice(0, 6);
+  if (!rows.length) return '';
+  return `<div class="banner mt16"><span class="banner-ic">♻️</span><div class="grow"><b>Остатки ${escapeHtml(fmtMonth(prevKey))} не переносятся в новый месяц автоматически.</b>
+    По прошлому месяцу: ${rows.map(x => escapeHtml(x.category) + ' — ' + (x.left > 0 ? 'осталось ' + money(x.left) : 'перерасход ' + money(-x.left))).join(' · ')}.
+    Если нужно продолжить с тем же лимитом — продлите его кнопкой «Взять лимиты из ${escapeHtml(fmtMonth(prevKey))}».</div></div>`;
+}
 
 /* ============================ ЦЕЛИ ============================ */
 VIEWS.goals = function(){
@@ -2753,6 +2868,12 @@ VIEWS.settings = function(){
               <option value="dark"${S.settings.theme === 'dark' ? ' selected' : ''}>Тёмная</option>
               <option value="light"${S.settings.theme === 'light' ? ' selected' : ''}>Светлая</option>
             </select></div>
+          <div><label class="label" for="setWeekStart">Неделя начинается</label>
+            <select id="setWeekStart" class="field" data-inp="week-start">
+              <option value="1"${num(S.settings.weekStart) !== 0 ? ' selected' : ''}>С понедельника</option>
+              <option value="0"${num(S.settings.weekStart) === 0 ? ' selected' : ''}>С воскресенья</option>
+            </select>
+            <div class="hint mt4">Влияет на недельные бюджеты (пн–вс или вс–сб).</div></div>
           <div><label class="label">Аккаунт</label><div class="field" style="display:flex;align-items:center">${escapeHtml((S.user && S.user.email) || '—')}</div></div>
           <div><label class="label">Разбор текста</label>
             <label class="row gap8" style="min-height:44px"><input type="checkbox" id="setAi" data-inp="ai-parse"${S.settings.aiParse ? ' checked' : ''}>
@@ -2818,7 +2939,7 @@ VIEWS.settings = function(){
         <div class="muted small mt4">Удаление всех операций и настроек из облака. Экспорт перед этим — хорошая идея.</div>
         <div class="row gap8 wrap mt12">
           <button class="btn danger" data-act="cloud-reset">Удалить мои данные из облака</button>
-          <button class="btn danger" data-act="account-delete">Удалить аккаунт целиком</button>
+          <button class="btn danger" data-act="account-delete-all">Удалить аккаунт целиком</button>
         </div>
         <div class="hint mt8">Полное удаление аккаунта выполняет Edge Function <code>delete-account</code> (внутри — service_role, поэтому только на сервере). Если она не развёрнута, приложение подскажет, что сделать.</div>
       </div>
@@ -2866,6 +2987,7 @@ let draft = {};
 function modalOp(id){
   const editing = id ? findOp(id) : null;
   const d = Object.assign({ type: 'expense', amount: '', category: 'Продукты', date: today(), note: '', accountId: '', learn: false }, draft.op || {}, editing || {});
+  d.editingId = editing ? String(editing.id) : null;   // помним режим правки: смена типа (Расход↔Доход) не должна терять id — иначе сохранение создавало дубль
   draft.op = d;
   openSheet({
     title: editing ? 'Изменить операцию' : 'Новая операция',
@@ -2878,7 +3000,7 @@ function modalOp(id){
       <div class="form-grid mt16">
         <div><label class="label" for="opAmount">Сумма, ₽</label><input id="opAmount" type="number" step="0.01" min="0" class="field" value="${escapeAttr(d.amount)}" placeholder="0"></div>
         <div><label class="label" for="opDate">Дата</label><input id="opDate" type="date" class="field" value="${escapeAttr(d.date)}"></div>
-        <div><label class="label" for="opCategory">Категория</label><select id="opCategory" class="field">
+        <div><label class="label" for="opFormCategory">Категория</label><select id="opFormCategory" class="field">
           ${categoryOptions(d.type).map(c => `<option${c === d.category ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select></div>
         <div><label class="label" for="opAccount">Счёт</label><select id="opAccount" class="field">
           <option value="">— не указан —</option>
@@ -2894,10 +3016,62 @@ function modalOp(id){
 }
 function readOpForm(){
   return {
-    type: (draft.op && draft.op.type) || 'expense', amount: fieldValue('opAmount'), category: fieldValue('opCategory'),
+    type: (draft.op && draft.op.type) || 'expense', amount: fieldValue('opAmount'), category: fieldValue('opFormCategory'),
     date: fieldValue('opDate') || today(), note: fieldValue('opNote'), accountId: fieldValue('opAccount'),
-    learn: !!(($('opLearn') || {}).checked)
+    learn: !!(($('opLearn') || {}).checked),
+    editingId: (draft.op && draft.op.editingId) || null
   };
+}
+/* ---------- разделение операции на части (один чек — несколько категорий) ---------- */
+let splitOpId = null;
+function splitRowHtml(op, amount){
+  return `<div class="row gap8 split-row" style="align-items:flex-end">
+    <div style="flex:0 0 38%"><label class="label">Сумма, ₽</label>
+      <input type="number" step="0.01" min="0" class="field split-amt" value="${escapeAttr(amount)}" data-inp="split-calc" inputmode="decimal"></div>
+    <div class="grow"><label class="label">Категория</label>
+      <select class="field split-cat">${categoryOptions(op.type).map(c => `<option>${escapeHtml(c)}</option>`).join('')}</select></div>
+    <button class="btn icon ghost" data-act="split-row-del" title="Убрать часть" aria-label="Убрать эту часть">✕</button>
+  </div>`;
+}
+function splitParts(){
+  return $$('.split-row').map(r => ({
+    amount: round2(num((r.querySelector('.split-amt') || {}).value || 0)),
+    category: (r.querySelector('.split-cat') || {}).value || 'Другое'
+  })).filter(p => p.amount > 0);
+}
+function updateSplitRemainder(){
+  const host = $('splitLeft'); if (!host) return;
+  const op = findOp(splitOpId); if (!op) return;
+  const total = sumMoney(splitParts(), p => p.amount);
+  const left = round2(num(op.amount) - total);
+  host.innerHTML = Math.abs(left) < 0.005
+    ? `<span class="ok">распределено всё: ${money(total)} ✓</span>`
+    : left > 0 ? `осталось распределить <b>${money(left)}</b>`
+    : `<span class="bad">сумма частей больше оригинала на ${money(-left)}</span>`;
+}
+function modalOpSplit(id){
+  const op = findOp(id);
+  if (!op) return;
+  splitOpId = String(op.id);
+  openSheet({
+    title: 'Разделить операцию',
+    subtitle: (op.note || op.category) + ' · ' + money(op.amount) + ' · ' + fmtDate(op.date),
+    html: `
+      <div class="muted small">Один чек — несколько категорий (например, «продукты и кафе в супермаркете»). Разделите сумму: в сумме части должны дать ${money(op.amount)}.</div>
+      <div id="splitRows" class="mt12">
+        ${splitRowHtml(op, String(round2(op.amount)))}
+        ${splitRowHtml(op, '')}
+      </div>
+      <div class="row between mt8" style="align-items:center">
+        <button class="btn sm" data-act="split-add-row">＋ Часть</button>
+        <div id="splitLeft" class="muted small"></div>
+      </div>
+      <div class="row gap8 mt16" style="justify-content:flex-end">
+        <button class="btn ghost" data-act="closeSheet">Отмена</button>
+        <button class="btn primary" data-act="split-save" data-id="${escapeAttr(op.id)}">Разделить</button>
+      </div>`
+  });
+  updateSplitRemainder();
 }
 function modalGoal(id){
   const g = id ? S.goals.find(x => String(x.id) === String(id)) : null;
@@ -3189,7 +3363,7 @@ async function runImport(){
 /* ============================ ДЕЙСТВИЯ ============================ */
 Object.assign(ACTIONS, {
   'go': t => go(t.dataset.tab),
-  'show-more-tabs': () => openSheet({ title: 'Все разделы', html: `<div class="col gap8">${TABS.map(x => `<button class="btn" data-act="go" data-tab="${x.id}">${x.icon} ${x.title}</button>`).join('')}</div>` }),
+  'show-more-tabs': () => openSheet({ title: 'Все разделы', html: `<div class="col gap8">${TABS.map(x => `<button class="btn" data-act="go" data-tab="${x.id}">${icon(x.icon)} ${x.title}</button>`).join('')}</div>` }),
   'closeSheet': () => closeSheet(),
   'show-shortcuts': () => modalShortcuts(),
   'goto-operations': () => go('operations'),
@@ -3197,6 +3371,12 @@ Object.assign(ACTIONS, {
   'logout': async () => { if (await confirmSheet({ title: 'Выйти из аккаунта?', text: 'Кэш этого аккаунта будет удалён с устройства. Данные останутся в облаке.', confirmText: 'Выйти' })) logout(); },
   'logout-anyway': () => logout(),
   'exit-demo': () => { lsDel(LS.demo); location.href = location.pathname; },
+  'stealth-toggle': () => {
+    const on = !stealthOn();
+    applyStealth(on);
+    renderTopbar();
+    toast(on ? 'Суммы скрыты. Вернуть видимость — та же кнопка в шапке.' : 'Суммы снова показаны');
+  },
 
   /* ---- операции ---- */
   'op-new': () => { draft.op = null; modalOp(); },
@@ -3206,7 +3386,8 @@ Object.assign(ACTIONS, {
     const f = readOpForm(), amount = round2(parseAmount(f.amount));
     if (!amount){ toast('Укажите сумму', { bad: true }); return; }
     const id = t.dataset.id || uid('op');
-    upsertOp({ id, type: f.type, amount, category: f.category, note: f.note || f.category, date: f.date, accountId: f.accountId });
+    const saved = upsertOp({ id, type: f.type, amount, category: f.category, note: f.note || f.category, date: f.date, accountId: f.accountId });
+    if (!saved) return;   // запись заблокирована (нет связи с облаком) — предупреждение уже показано
     if (f.learn && f.note) { const kw = learnRuleFrom(f.note, f.category, f.type); if (kw) toast('Правило сохранено: «' + kw + '» → ' + f.category); }
     closeSheet(); draft.op = null; render();
     toast(t.dataset.id ? 'Операция обновлена' : 'Операция добавлена');
@@ -3218,6 +3399,50 @@ Object.assign(ACTIONS, {
     toast('Операция удалена', { action: 'Отменить', onAction: () => { upsertOp(removed); render(); } });
   },
   'op-more': () => { S.view.opLimit += 40; renderOpsResult(); },
+  'op-duplicate': t => {
+    const op = findOp(t.dataset.id); if (!op) return;
+    const copy = upsertOp({ id: uid('op'), type: op.type, amount: op.amount, category: op.category, note: op.note, date: today(), accountId: op.accountId, source: op.source });
+    if (!copy) return;
+    if (S.view.tab === 'operations' && $('opResult')) renderOpsResult(); else render();
+    toast('Операция продублирована на сегодня', { action: 'Отменить', onAction: () => { removeOps([copy.id]); render(); } });
+  },
+  'op-split': t => modalOpSplit(t.dataset.id),
+  'split-add-row': () => {
+    const host = $('splitRows'), op = findOp(splitOpId);
+    if (!host || !op) return;
+    host.insertAdjacentHTML('beforeend', splitRowHtml(op, ''));
+    updateSplitRemainder();
+  },
+  'split-row-del': t => {
+    if ($$('.split-row').length <= 2){ toast('Минимум две части — или просто отмените разделение', { bad: true }); return; }
+    const row = t.closest('.split-row'); if (row) row.remove();
+    updateSplitRemainder();
+  },
+  'split-save': t => {
+    const op = findOp(t.dataset.id); if (!op) return;
+    const parts = splitParts();
+    if (parts.length < 2){ toast('Разделите хотя бы на две части', { bad: true }); return; }
+    const total = sumMoney(parts, p => p.amount);
+    if (Math.abs(total - num(op.amount)) >= 0.005){
+      toast('Сумма частей ' + money(total) + ', а нужно ' + money(op.amount), { bad: true });
+      return;
+    }
+    if (writesBlocked()) return;
+    const created = [];
+    parts.forEach((p, i) => {
+      const c = upsertOp({
+        id: uid('op'), type: op.type, amount: p.amount, category: p.category,
+        note: (op.note || op.category) + (parts.length > 1 ? ' · ' + (i + 1) + '/' + parts.length : ''),
+        date: op.date, accountId: op.accountId, source: op.source
+      });
+      if (c) created.push(c);
+    });
+    if (!created.length) return;
+    removeOps([op.id]);
+    closeSheet(); render();
+    toast('Операция разделена на ' + created.length + ' ' + plural(created.length, 'часть', 'части', 'частей'),
+      { action: 'Отменить', onAction: () => { removeOps(created.map(c => c.id)); upsertOp(op); render(); } });
+  },
   'op-reset-filters': () => { Object.assign(S.view, { opQuery: '', opType: 'all', opCategory: 'all', opMonth: 'all', opLimit: 40 }); renderView(); },
   'qadd-submit': () => submitQuickAdd(),
   'qadd-rule': t => {
@@ -3422,6 +3647,7 @@ Object.assign(ACTIONS, {
     if (!ok) return;
     S.categorySets[kind] = S.categorySets[kind].filter(c => c !== cat);
     delete S.budgets[cat];
+    if (S.settings.weeklyBudgets) delete S.settings.weeklyBudgets[cat];   // недельный лимит тоже уходил вместе с категорией
     S.rules = S.rules.filter(r => r.category !== cat);
     saveProfileToCloud(); render(); toast('Категория удалена');
   },
@@ -3450,7 +3676,7 @@ Object.assign(ACTIONS, {
       else toast('Приложение работает без сервис-воркера', { bad: true });
     } catch (e){ toast('Не удалось обновить: ' + e.message, { bad: true }); }
   },
-  'account-delete': async () => {
+  'account-delete-all': async () => {
     if (S.demo){ toast('В демо-режиме аккаунт удалить нельзя', { bad: true }); return; }
     const ok = await confirmSheet({
       title: 'Удалить аккаунт навсегда?',
@@ -3487,6 +3713,17 @@ Object.assign(ACTIONS, {
   },
   'diag-download': () => { downloadText('fintrack-diagnostics-' + today() + '.txt', diagText() || 'Ошибок не зафиксировано.', 'text/plain'); toast('Журнал сохранён'); },
   'diag-clear': () => { diagClear(); render(); toast('Журнал очищен'); },
+  'rep-copy': () => {
+    const r = periodRange(), st = periodStats(r.from, r.to);
+    const delta = st.prevExp ? Math.round((st.exp - st.prevExp) / st.prevExp * 100) : null;
+    const text = `FinTrack AI · отчёт за период ${fmtDateLong(r.from)} — ${fmtDateLong(r.to)} (${st.days} ${plural(st.days, 'день', 'дня', 'дней')})\n` +
+      `Доходы: ${money(st.inc)}\nРасходы: ${money(st.exp)}\nИтог: ${money(st.balance)}\n` +
+      (delta === null ? '' : `Сравнение с прошлым периодом: ${delta >= 0 ? '+' : ''}${delta}% расходов (${money(st.prevExp)})\n`) +
+      `\nПо категориям:\n` + (st.byCat.length ? st.byCat.map(c => `  ${c.category}: ${money(c.value)} (${percent(c.value, st.exp)})`).join('\n') : '  нет расходов');
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+      () => toast('Отчёт за период скопирован в буфер обмена'),
+      () => toast('Не удалось скопировать — браузер запретил доступ к буферу', { bad: true }));
+  },
   'analytics-report': () => {
     const key = S.view.analyticsMonth || thisMonthKey(), st = monthStats(key), byCat = spendByCategory(key, 'expense');
     const text = `FinTrack AI · отчёт за ${fmtMonth(key)}\nДоходы: ${money(st.income)}\nРасходы: ${money(st.expense)}\nИтог: ${money(st.balance)}\n\nПо категориям:\n` +
@@ -3524,6 +3761,7 @@ async function submitQuickAdd(){
   }
   if (!p || p.amount === null){ draft.op = { type: p ? p.type : 'expense', category: p ? p.category : 'Другое', note: text, date: p ? p.date : today() }; modalOp(); return; }
   const op = upsertOp({ id: uid('op'), type: p.type, amount: p.amount, category: p.category, note: p.note, date: p.date });
+  if (!op) return;   // запись заблокирована — предупреждение уже показано
   if (input) input.value = '';
   qaddPreview();
   if (S.view.tab === 'operations' && $('opResult')) renderOpsResult(); else renderView();
@@ -3532,7 +3770,10 @@ async function submitQuickAdd(){
 function applyRecurringOnce(id){
   const r = S.recurring.find(x => String(x.id) === String(id));
   if (!r) return null;
-  const op = upsertOp({ id: uid('op'), type: r.type, amount: r.amount, category: r.category, note: r.name, date: r.next, accountId: r.accountId, source: 'recurring' });
+  if (writesBlocked()) return null;
+  // платёж, который ещё не наступил, записываем сегодняшним датой — иначе расход уезжает в будущее
+  const op = upsertOp({ id: uid('op'), type: r.type, amount: r.amount, category: r.category, note: r.name, date: additionDate(r.next), accountId: r.accountId, source: 'recurring' });
+  if (!op) return null;
   const step = r.period === 'weekly' ? 7 : r.period === 'yearly' ? 365 : 0;
   let next = step ? addDaysISO(r.next, step) : addMonthsISO(r.next, 1);
   let guard = 0;
@@ -3548,6 +3789,7 @@ function undoCreditPayment(res){
   const nxt = nextUnpaidPayment(c);
   c.paymentDate = nxt ? nxt.date : p.date;
   c.paid = false;
+  c.monthlyPayment = p.amount || c.monthlyPayment;      // вернули прежний платёж (после платежа он пересчитывался)
   saveProfileToCloud();
 }
 function undoCardPayment(res){
@@ -3582,6 +3824,46 @@ function renderViewKeepingFocus(){
    app.js — запуск приложения: вход, восстановление пароля, демо-режим,
    обработчики ввода, сервис-воркер
    ========================================================================== */
+
+/* ============================================================================
+   Приватный режим («скрыть суммы»): одно нажатие — и все цифры в интерфейсе
+   заменяются на •, удобно в транспорте или на экране проектора.
+   Маскируются текстовые узлы (текст меняется на месте), поэтому состояние
+   приложения не ломается: при выключении всё перерисовывается из S заново.
+   ========================================================================== */
+const STEALTH_KEY = 'ft.v2.stealth';
+let stealthObserver = null, stealthMasking = false;
+function stealthOn(){ try { return localStorage.getItem(STEALTH_KEY) === '1'; } catch (e){ return false; } }
+function maskDom(){
+  if (stealthMasking) return;
+  stealthMasking = true;
+  try {
+    ['app', 'toasts', 'sheetHost'].map(id => $(id)).filter(Boolean).forEach(root => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach(n => {
+        if (!n.data || !/\d/.test(n.data)) return;
+        const p = n.parentElement;
+        if (p && p.closest('script,style,noscript')) return;
+        n.data = n.data.replace(/\d/g, '•');       // структура строки (и ₽, и разделители) сохраняется
+      });
+    });
+  } finally { stealthMasking = false; }
+}
+function startStealthObserver(){
+  stopStealthObserver();
+  if (typeof MutationObserver === 'undefined') return;
+  stealthObserver = new MutationObserver(() => maskDom());
+  stealthObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+function stopStealthObserver(){ if (stealthObserver){ stealthObserver.disconnect(); stealthObserver = null; } }
+function applyStealth(on){
+  try { on ? localStorage.setItem(STEALTH_KEY, '1') : localStorage.removeItem(STEALTH_KEY); } catch (e){}
+  if (on){ maskDom(); startStealthObserver(); }
+  else { stopStealthObserver(); if (typeof render === 'function' && (S.user || S.demo)) render(); }
+}
+function initStealth(){ if (stealthOn()){ maskDom(); startStealthObserver(); } }
 
 /* ============================================================================
    Тема оформления: dark | light | auto.
@@ -3931,6 +4213,7 @@ async function boot(){
   installInputEvents();
   const savedUi = lsGet(LS.ui, {});
   if (savedUi && savedUi.tab) S.view.tab = savedUi.tab;
+  initStealth();   // приватный режим восстанавливаем сразу: наблюдатель маскирует и будущие отрисовки
 
   const params = new URLSearchParams(location.search);
   const hash = String(location.hash || '');
@@ -3970,11 +4253,22 @@ function installInputEvents(){
       S.view.opQuery = fieldValue('opQuery'); S.view.opType = fieldValue('opType');
       S.view.opCategory = fieldValue('opCategory'); S.view.opMonth = fieldValue('opMonth'); S.view.opLimit = 40;
       renderOpsResult();
-    } else if (kind === 'analytics-month'){ S.view.analyticsMonth = fieldValue('anMonth'); renderView(); }
+    } else if (kind === 'analytics-month'){ S.view.analyticsMonth = fieldValue('anMonth'); S.view.repFrom = null; S.view.repTo = null; renderView(); }
+    else if (kind === 'rep-range'){
+      S.view.repFrom = fieldValue('repFrom'); S.view.repTo = fieldValue('repTo');
+      renderViewKeepingFocus();
+    }
+    else if (kind === 'split-calc') updateSplitRemainder();
     else if (kind === 'credit-calc') updateCreditPreview();
     else if (kind === 'card-calc') updateCardPreview();
     else if (kind === 'import-map'){ readImportMapping(); renderImportBody(); }
     else if (kind === 'theme'){ applyTheme(fieldValue('setTheme')); saveProfileToCloud(); toast('Тема обновлена'); }
+    else if (kind === 'week-start'){
+      S.settings.weekStart = num(t.value) === 0 ? 0 : 1;
+      saveProfileToCloud();
+      toast('Неделя теперь начинается ' + (S.settings.weekStart === 0 ? 'с воскресенья' : 'с понедельника'));
+      render();
+    }
     else if (kind === 'ai-parse'){
       S.settings.aiParse = !!(t.checked);
       saveProfileToCloud();

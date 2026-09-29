@@ -1,0 +1,22 @@
+{
+  "name": "fintrack-ai",
+  "version": "2.4.0",
+  "description": "FinTrack AI — трекер личных финансов в рублях: один index.html, работает офлайн",
+  "private": true,
+  "scripts": {
+    "test": "node tests/smoke.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Andrey1904-dev/FinTrack-AI.git"
+  },
+  "keywords": ["finance", "tracker", "pwa", "supabase"],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Andrey1904-dev/FinTrack-AI/issues"
+  },
+  "homepage": "https://github.com/Andrey1904-dev/FinTrack-AI#readme",
+  "devDependencies": {
+    "jsdom": "^30.1.1"
+  }
+}
