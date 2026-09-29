@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinTrack AI — личные финансы</title>
+<meta name="description" content="FinTrack AI — трекер личных финансов: расходы, доходы, бюджеты, цели, кредиты и Telegram-бот. Работает офлайн, данные хранятся в вашем аккаунте.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FinTrack AI">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="FinTrack AI — умные личные финансы">
+<meta property="og:description" content="Учёт расходов, бюджеты, цели, кредиты и финансовый ассистент в Telegram.">
+<meta property="og:image" content="og-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#070b16">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+/*CSS*/
+</style>
+<script>
+/* Тема применяется до первой отрисовки, чтобы не было «вспышки» светлого экрана.
+   Значение хранится в браузере; в настройках можно выбрать «как в системе». */
+try{
+  var __t = localStorage.getItem('ft.v2.theme') || 'auto';
+  var __dark = __t === 'dark' || (__t === 'auto' && !(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches));
+  document.documentElement.setAttribute('data-theme', __dark ? 'dark' : 'light');
+}catch(e){ document.documentElement.setAttribute('data-theme', 'dark'); }
+</script>
+<!-- ============================================================================
+     Мониторинг ошибок (по желанию).
+     Приложение уже пишет ошибки и сбои синхронизации в «Настройки → Диагностика»
+     и передаёт их в window.Sentry, если он подключён. Достаточно раскомментировать
+     нужный вариант и подставить свой адрес.
+
+     Вариант 1 — свой/самостоятельный Sentry (рекомендуется: клиент не ходит в CDN):
+       <script src="/sentry.min.js"></script>
+       <script>
+         Sentry.init({ dsn: 'https://<ключ>@sentry.example.com/<проект>', environment: 'production',
+                       beforeSend(event){ event.user = { id: (window.S && S.user && S.user.id) || 'anonymous' }; return event; } });
+       </script>
+
+     Вариант 2 — облачный Sentry через CDN (тогда в предпросмотре без сети скрипт
+     не загрузится — это нормально, приложение продолжит работать):
+       <script src="https://browser.sentry-cdn.com/9/bundle.min.js" crossorigin="anonymous"></script>
+       <script>Sentry && Sentry.init({ dsn: 'https://<ключ>@o0.ingest.sentry.io/0' });</script>
+
+     Проверить, что всё работает: «Настройки → Диагностика → Проверить».
+     ========================================================================== -->
+</head>
+<body>
+
+<!-- ===================== ВХОД ===================== -->
+<div id="authScreen" class="auth hidden">
+  <div class="card" style="width:min(440px,100%)">
+    <div class="row gap12">
+      <div class="auth-logo">↗</div>
+      <div><div class="bold" style="font-size:20px">FinTrack AI</div><div class="muted tiny">ЛИЧНЫЕ ФИНАНСЫ</div></div>
+    </div>
+    <div class="mt24">
+      <div class="section-title" id="authTitle">Вход в аккаунт</div>
+      <div class="muted small mt4">Данные хранятся в вашем аккаунте Supabase и доступны с любого устройства.</div>
+    </div>
+    <input type="hidden" id="authMode" value="login">
+    <div class="tabs2 mt16">
+      <button id="authTabLogin" class="active" data-act="auth-login-mode">Войти</button>
+      <button id="authTabSignup" data-act="auth-signup-mode">Регистрация</button>
+    </div>
+    <div class="mt16">
+      <label class="label" for="authEmail">Почта</label>
+      <input id="authEmail" type="email" class="field" autocomplete="email" placeholder="you@example.com">
+      <label class="label mt12" for="authPassword">Пароль</label>
+      <input id="authPassword" type="password" class="field" autocomplete="current-password" placeholder="минимум 6 символов">
+      <input id="authPassword2" type="password" class="field mt12 hidden" autocomplete="new-password" placeholder="повторите пароль">
+      <button id="authSubmit" class="btn primary mt16" style="width:100%" data-act="auth-submit">Войти</button>
+      <div class="row between mt8">
+        <button class="btn sm ghost" data-act="auth-forgot">Забыли пароль?</button>
+        <a class="small" href="?demo=1">Посмотреть демо</a>
+      </div>
+      <div id="authMsg" class="msg hidden"></div>
+    </div>
+    <div class="muted tiny mt24">Пароль не хранится в приложении — вход выполняет Supabase Auth. Публичный ключ в коде безопасен: строки защищены правилами RLS.</div>
+  </div>
+</div>
+
+<!-- ===================== ПРИЛОЖЕНИЕ ===================== -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">↗</div><div>FinTrack<small>AI FINANCE</small></div></div>
+    <nav class="nav" id="navSide" aria-label="Разделы"></nav>
+    <div class="sidebar-bottom">
+      <div class="sync-bar" id="syncBar">Готово</div>
+      <div class="muted tiny mt8 full-only">Подсказки: <span class="kbd">N</span> — новая операция, <span class="kbd">/</span> — поиск, <span class="kbd">?</span> — справка</div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="nav-mobile" id="navMobile"></div>
+    <header class="row between wrap gap12 mb16">
+      <div>
+        <div class="eyebrow" id="todayLabel"></div>
+        <h1 style="font-size:25px">Финансы под контролем</h1>
+        <div class="muted small">Сайт и Telegram-бот — один аккаунт и одни цифры</div>
+      </div>
+      <div class="row gap8 wrap">
+        <span class="tag" id="accountLine"></span>
+        <span class="tag blue" id="monthLabel"></span>
+        <button class="btn primary" data-act="op-new">＋ Операция</button>
+      </div>
+    </header>
+    <div id="bannerHost"></div>
+    <div id="view"></div>
+    <div class="center muted tiny mt24">FinTrack AI 2.0 · данные в вашем Supabase · экспорт и импорт всегда доступны</div>
+  </main>
+</div>
+
+<div id="sheetHost" class="hidden"></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script>
+/*VENDOR*/
+</script>
+<script>
+/*APP*/
+</script>
+</body>
+</html>
