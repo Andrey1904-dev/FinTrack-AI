@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinTrack AI — личные финансы, которые не теряются</title>
+<meta name="description" content="Трекер личных финансов в рублях: расходы, доходы, бюджеты, цели, кредиты и Telegram-бот. Работает офлайн, данные — в вашем аккаунте Supabase.">
+<meta property="og:title" content="FinTrack AI — умные личные финансы">
+<meta property="og:description" content="Учёт расходов текстом и голосом, бюджеты, цели, кредиты и финансовый ассистент в Telegram.">
+<meta property="og:type" content="website">
+<style>
+/* ============================================================================
+   Лендинг FinTrack AI — полностью автономный: без шрифтов, картинок и
+   скриптов извне. Открывается офлайн и как локальный файл.
+   ========================================================================== */
+:root{
+  --bg:#070b16; --bg2:#0b1120; --card:#101a30; --line:#1d2a45;
+  --text:#e8edf7; --muted:#8fa0bd; --brand:#557dff; --brand2:#9b5cff;
+  --ok:#37e0a4; --warn:#f6c76b; --bad:#ff719f;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+a{color:inherit;text-decoration:none}
+.tag{display:inline-block;padding:3px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:13px}
+header{position:sticky;top:0;background:rgba(7,11,22,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);z-index:10}
+.nav{display:flex;align-items:center;gap:14px;height:60px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.4px}
+.logo-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center;color:#fff;font-weight:900}
+.nav a.ghost{color:var(--muted);font-size:14px}
+.nav .spacer{flex:1}
+.btn{display:inline-block;padding:10px 20px;border-radius:12px;font-weight:700;font-size:15px;border:1px solid var(--line);color:var(--text);cursor:pointer}
+.btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border:0;color:#fff}
+.btn.sm{padding:7px 14px;font-size:13px;border-radius:10px}
+.hero{padding:84px 0 64px;text-align:center;
+  background:radial-gradient(600px 300px at 50% 0%,rgba(85,125,255,.18),transparent 70%),radial-gradient(500px 260px at 80% 10%,rgba(155,92,255,.14),transparent 70%)}
+.hero h1{font-size:clamp(30px,6vw,52px);line-height:1.12;letter-spacing:-1.5px;font-weight:900;max-width:820px;margin:0 auto}
+.hero h1 .grad{background:linear-gradient(90deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.sub{color:var(--muted);font-size:clamp(16px,2.4vw,19px);max-width:640px;margin:18px auto 0}
+.hero .cta{margin-top:30px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.mock{margin:44px auto 0;max-width:860px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.45);text-align:left}
+.mock .bar{display:flex;gap:6px;margin-bottom:14px}
+.mock .bar i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.mock .rows{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.mock .row-op{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.mock .row-op b{margin-left:auto;font-variant-numeric:tabular-nums}
+.mock .row-op .ic{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--brand),var(--brand2));opacity:.85;display:grid;place-items:center;font-size:13px}
+.mock .row-op .minus b{color:var(--bad)}
+.mock .row-op .plus b{color:var(--ok)}
+section{padding:64px 0}
+h2{font-size:clamp(24px,4vw,34px);letter-spacing:-.8px;font-weight:900;margin-bottom:8px}
+p.lead{color:var(--muted);max-width:640px;margin-bottom:34px}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:840px){.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+.card h3{font-size:17px;margin:10px 0 6px;letter-spacing:-.3px}
+.card p{color:var(--muted);font-size:14.5px}
+.card .emo{font-size:24px}
+.steps{counter-reset:step;display:grid;gap:14px;grid-template-columns:repeat(3,1fr)}
+@media(max-width:840px){.steps{grid-template-columns:1fr}}
+.step{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+.step::before{counter-increment:step;content:counter(step);display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-weight:900}
+.step h3{font-size:16px;margin:12px 0 6px}
+.step p{color:var(--muted);font-size:14.5px}
+.quote{background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:12px;padding:16px 18px;color:var(--muted);font-size:14.5px;margin-top:22px}
+.quote b{color:var(--text)}
+footer{border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:14px}
+footer .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#"><span class="logo-mark">↗</span> FinTrack AI</a>
+    <span class="spacer"></span>
+    <a class="ghost" href="#features">Возможности</a>
+    <a class="ghost" href="#how">Как начать</a>
+    <a class="ghost" href="index.html">Войти</a>
+    <a class="btn primary sm" href="index.html?demo=1">Демо</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <span class="tag">Учёт только в рублях ₽ · офлайн · Telegram-бот</span>
+    <h1>Личные финансы, которые <span class="grad">не теряются</span></h1>
+    <p class="sub">Траты текстом и голосом, бюджеты, цели, кредиты с настоящим графиком платежей и ассистент в Telegram. Всё в одном файле — работает даже без интернета.</p>
+    <div class="cta">
+      <a class="btn primary" href="index.html?demo=1">Открыть демо без регистрации</a>
+      <a class="btn" href="#how">Развернуть на своём Supabase</a>
+    </div>
+    <div class="mock">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="rows">
+        <div class="row-op"><span class="ic">🛒</span> Пятёрочка · Продукты <span class="muted">· вчера</span><b>−1 842,30 ₽</b></div>
+        <div class="row-op plus"><span class="ic">💰</span> Зарплата <span class="muted">· 05.09</span><b>+80 000 ₽</b></div>
+        <div class="row-op"><span class="ic">📱</span> билайн · Мобильный оператор <span class="muted">· сегодня</span><b>−900 ₽</b></div>
+        <div class="row-op"><span class="ic">🏦</span> Платёж по кредиту · Альфа <span class="muted">· через 3 дня</span><b>−10 000 ₽</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Что внутри</h2>
+    <p class="lead">Веб-приложение и бот работают с одной базой: операция из Telegram появляется на сайте без перезагрузки.</p>
+    <div class="grid g3">
+      <div class="card"><div class="emo">⌨️</div><h3>Траты текстом</h3><p>«пятёрочка 1200 вчера», «билайн 900», «зарплата 80к» — сумма, дата и категория распознаются сами. Правила запоминаются.</p></div>
+      <div class="card"><div class="emo">🎤</div><h3>Голос и фото чека</h3><p>Скажите трату голосом или сфотографируйте чек — серверная модель вернёт сумму, дату и категорию.</p></div>
+      <div class="card"><div class="emo">📊</div><h3>Честная аналитика</h3><p>Доходы, расходы, «можно тратить в день», графики за полгода и категории, которые растут быстрее всего.</p></div>
+      <div class="card"><div class="emo">🎯</div><h3>Бюджеты и цели</h3><p>Лимиты на месяц и на неделю (пн–вс) по категориям, финансовые цели с прогнозом даты достижения.</p></div>
+      <div class="card"><div class="emo">🏦</div><h3>Кредиты по-настоящему</h3><p>Аннуитетный график: тело, проценты, остаток, досрочное погашение и переплата. Кредитки с льготным периодом.</p></div>
+      <div class="card"><div class="emo">🤖</div><h3>Telegram-бот</h3><p>Отчёты за день и месяц, лимиты, ближайшие платежи, воскресный дайджест и напоминания о платежах.</p></div>
+      <div class="card"><div class="emo">📴</div><h3>Работает офлайн</h3><p>Всё приложение — один HTML-файл. Без интернета показывает сохранённую копию, изменения уходят сами.</p></div>
+      <div class="card"><div class="emo">🔐</div><h3>Данные — ваши</h3><p>Ваш проект Supabase, RLS на все таблицы, экспорт JSON/CSV и архив всей истории одним ZIP.</p></div>
+      <div class="card"><div class="emo">🌗</div><h3>Светлая и тёмная темы</h3><p>Вручную или «как в системе», выбор запоминается и синхронизируется между устройствами.</p></div>
+    </div>
+    <div class="quote">
+      <b>Почему «не теряются»?</b> В первой версии сбой сети приводил к тому, что первое же добавление затирало всю историю.
+      Теперь запись идёт точечно (upsert по client_id), а пока облако не ответило — запись блокируется с понятным сообщением.
+      Очередь изменений и офлайн-кэш переживают пропажу связи.
+    </div>
+  </div>
+</section>
+
+<section id="how" style="background:var(--bg2)">
+  <div class="wrap">
+    <h2>Три шага до своего трекера</h2>
+    <p class="lead">Проект открыт (MIT): разворачивается на вашем аккаунте Supabase, публикуется где угодно — это статика.</p>
+    <div class="steps">
+      <div class="step"><h3>Создайте проект Supabase</h3><p>Выполните две идемпотентные миграции из <b>supabase/migrations</b>, включите e-mail-провайдер и Realtime.</p></div>
+      <div class="step"><h3>Разверните функции</h3><p>Готовые Edge Functions: Telegram-бот, разбор текста моделью, напоминания, дайджест, удаление аккаунта. Инструкция — в репозитории.</p></div>
+      <div class="step"><h3>Опубликуйте статику</h3><p>GitHub Pages, Netlify, Vercel, Cloudflare — или просто откройте index.html как файл. Настройки заголовков уже в репозитории.</p></div>
+    </div>
+    <div class="cta" style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+      <a class="btn primary" href="index.html?demo=1">Попробовать демо</a>
+      <a class="btn" href="https://github.com/Andrey1904-dev/FinTrack-AI">Исходники на GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <span>© FinTrack AI · MIT License</span>
+    <span class="spacer" style="flex:1"></span>
+    <a href="index.html">Войти</a>
+    <a href="index.html?demo=1">Демо</a>
+    <a href="https://github.com/Andrey1904-dev/FinTrack-AI">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>

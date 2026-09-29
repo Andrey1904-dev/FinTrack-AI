@@ -1,0 +1,28 @@
+# Проверки Edge Functions: типы (deno check) + сценарии в Node (без Deno и ключей)
+name: functions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Проверка типов Edge Functions
+        run: |
+          cd supabase/functions
+          for f in */index.ts _shared/*.ts; do
+            deno check "$f"
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Сценарии функций в Node (стабы вместо Deno/Supabase)
+        run: node --experimental-strip-types --import ./tests/deno-stub.mjs tests/functions.mjs

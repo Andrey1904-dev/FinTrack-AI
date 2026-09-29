@@ -1,0 +1,24 @@
+{
+  "name": "fintrack-ai",
+  "version": "2.3.0",
+  "private": true,
+  "description": "FinTrack AI — трекер личных финансов в рублях: веб-приложение одним HTML-файлом + Telegram-бот на Supabase",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && node tests/unit.mjs && node tests/smoke.mjs && node --experimental-strip-types --import ./tests/deno-stub.mjs tests/functions.mjs",
+    "test:unit": "node tests/unit.mjs",
+    "test:smoke": "node tests/smoke.mjs",
+    "test:functions": "node --experimental-strip-types --import ./tests/deno-stub.mjs tests/functions.mjs",
+    "test:e2e": "node tests/e2e-browser.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.1",
+    "puppeteer": "25.12.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "license": "MIT"
+}

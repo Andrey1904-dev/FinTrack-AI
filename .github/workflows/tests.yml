@@ -1,0 +1,32 @@
+# Тесты FinTrack AI: сборка должна воспроизводить index.html,
+# юнит-проверки и прогон интерфейса обязаны быть зелёными.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Зависимости для тестов
+        run: npm ci || npm install
+      - name: Сборка index.html из src/
+        run: node build.mjs
+      - name: index.html совпадает с собранным
+        run: |
+          node build.mjs
+          git diff --exit-code -- index.html || (echo "index.html устарел: запустите node build.mjs и закоммитьте результат" && exit 1)
+      - name: Юнит-проверки
+        run: node tests/unit.mjs
+      - name: Прогон интерфейса (jsdom)
+        run: node tests/smoke.mjs
+      - name: Сквозные проверки в Chrome
+        run: node tests/e2e-browser.mjs

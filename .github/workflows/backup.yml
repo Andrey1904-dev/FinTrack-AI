@@ -1,0 +1,35 @@
+# Ночная выгрузка базы в артефакты GitHub (хранятся 90 дней).
+# Включается двумя секретами: SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY.
+# Без секретов воркфлоу завершается с понятным сообщением и не падает с красным.
+name: backup
+
+on:
+  schedule:
+    - cron: "0 2 * * *"     # каждый день в 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Выгрузка данных
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Секреты SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY не заданы — выгрузка пропущена."
+            exit 0
+          fi
+          node scripts/backup.mjs
+      - name: Сохранение артефакта (90 дней)
+        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: fintrack-backup
+          path: backup/
+          retention-days: 90
