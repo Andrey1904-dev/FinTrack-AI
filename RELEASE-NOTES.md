@@ -1,5 +1,12 @@
 # FinTrack AI — release notes
 
+## 2.6.0 — faster sync retries and a redesigned Telegram bot
+
+- Pending changes are retried every 5 seconds while the tab is visible and the device is online; the banner shows the last error.
+- Telegram bot messages are now cards with progress bars, budget traffic lights, category icons, period-over-period trends and in-place navigation.
+- New `/week` report, editable income/expense type on the confirmation card, and instant budget impact after saving an expense.
+- Reminders use the same visual style and include quick-action buttons. Re-run `scripts/set-telegram-webhook.mjs` to refresh the command menu and bot description, and redeploy `telegram-webhook` and `telegram-notifications`.
+
 ## 2.5.0 — Telegram bot and reminders
 
 - Connect the app to a Telegram bot with a 15-minute one-time code or a secure deep link.

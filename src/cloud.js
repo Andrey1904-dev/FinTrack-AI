@@ -10,6 +10,8 @@ const SUPABASE_URL = 'https://bqlocvjjdulpizdfqotm.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ii5Ny_JSFV_LLWPRiPVwzg_eEp1rz9z';
 
 let sb = null, cloudReady = false, flushing = false, recentPushAt = 0, realtimeChannel = null;
+const OUTBOX_RETRY_MS = 5000;          // как часто повторяем отправку очереди, пока в ней что-то есть
+let outboxTimer = null, lastOutboxError = '';
 let syncedIds = new Set();
 let hasAccountColumn = true, hasRulesColumn = true, hasSettingsColumn = true;
 
@@ -129,6 +131,7 @@ function outboxSave(list){
   lsSet(LS.outbox(S.user.id), list);
   S.sync.pending = list.length;
   renderSync();
+  if (typeof renderBanner === 'function') renderBanner();
 }
 function outboxPush(entry){
   if (!S.user || S.demo) return;
@@ -207,16 +210,35 @@ async function flushOutbox(){
       } catch (err){
         S.sync.state = 'pending';
         S.sync.message = err.message || 'не удалось отправить изменения';
-        diagLog('outbox', S.sync.message, e.kind);
+        // повтор идёт каждые 5 с — одинаковую ошибку пишем в журнал один раз, а не сотни
+        if (S.sync.message !== lastOutboxError){ lastOutboxError = S.sync.message; diagLog('outbox', S.sync.message, e.kind); }
         renderSync();
+        if (typeof renderBanner === 'function') renderBanner();
         break;
       }
     }
-    if (!outboxAll().length){ S.sync.pending = 0; if (S.sync.state !== 'ok'){ S.sync.state = 'ok'; S.sync.message = ''; } }
+    if (!outboxAll().length){ S.sync.pending = 0; lastOutboxError = ''; if (S.sync.state !== 'ok'){ S.sync.state = 'ok'; S.sync.message = ''; } }
   } finally {
     flushing = false;
     renderSync();
   }
+}
+/* Автоповтор: пока очередь не пуста, каждые 5 секунд пробуем отправить её снова.
+   Работает только когда есть что отправлять, вкладка видима и есть сеть —
+   иначе не тратим заряд и трафик. Интерфейс перерисовывается только при
+   смене состояния, чтобы не сбрасывать формы, которые пользователь заполняет. */
+async function outboxTick(){
+  if (!S.user || S.demo || flushing || !isOnline()) return;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!outboxAll().length) return;
+  await flushOutbox();
+  if (outboxAll().length) return;                 // всё ещё не ушло — попробуем через 5 секунд
+  if (!cloudReady) await syncPull({ silent: true }); // до этого показывали офлайн-копию — обновляем с сервера
+  render();                                        // очередь опустела: плашка исчезает, данные свежие
+}
+function startOutboxRetry(){
+  if (outboxTimer) return;
+  outboxTimer = setInterval(() => { outboxTick().catch(e => diagLog('outbox', e && e.message || e, 'retry-timer')); }, OUTBOX_RETRY_MS);
 }
 async function retrySync(){
   if (!S.user) return;
@@ -242,10 +264,13 @@ function attachRealtime(){
   } catch (e){ /* Realtime может быть отключён — приложение продолжит работать */ }
 }
 function watchConnectivity(){
+  startOutboxRetry();
   window.addEventListener('online', () => { renderSync(); flushOutbox().then(() => syncPull({ silent: true })).then(render); });
   window.addEventListener('offline', renderSync);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && S.user && !S.demo && Date.now() - S.sync.lastSync > 60000) syncPull({ silent: true }).then(render);
+    if (document.visibilityState !== 'visible' || !S.user || S.demo) return;
+    if (outboxAll().length) outboxTick().catch(() => {});   // вернулись на вкладку — не ждём очередного тика
+    else if (Date.now() - S.sync.lastSync > 60000) syncPull({ silent: true }).then(render);
   });
 }
 

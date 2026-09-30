@@ -65,12 +65,14 @@ Notifications include:
 
 A user can change categories, timezone, and notification types in Telegram with `/notifications` and `/timezone`. The web app seeds the timezone from the device when generating a link code; `UTC` is the database fallback.
 
+After deploying a new version of the functions, re-run the registration script: it also refreshes the bot's command menu, description and short description. All message layouts live in `supabase/functions/_shared/render.js` and are covered by `node tests/telegram.mjs`.
+
 ## 5. Connect and manage
 
 1. Sign in to the web app and open **Telegram AI**.
 2. Press **Получить код привязки**; it expires after 15 minutes.
 3. Use **Открыть бота** to start the bot with a one-time deep link, or send `/link CODE` manually in a private chat.
-4. Use `/menu`, `/help`, `/today`, `/month`, `/credits`, `/upcoming`, `/budget`, `/goals`, `/notifications`, `/timezone`, and `/undo`.
+4. Use `/menu`, `/help`, `/today`, `/week`, `/month`, `/credits`, `/upcoming`, `/budget`, `/goals`, `/notifications`, `/timezone`, and `/undo`.
 5. Send a natural-language transaction such as `кофе 250 вчера`. The bot presents amount/category/date and writes only after pressing **Сохранить**. `/undo` can reverse a Telegram-created operation for 24 hours.
 
 Budget management examples:

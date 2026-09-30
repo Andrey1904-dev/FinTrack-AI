@@ -1,6 +1,7 @@
 import { adminClient, jsonResponse } from '../_shared/supabase.js';
-import { constantTimeEqual, escapeHtml, sendMessage } from '../_shared/telegram.js';
-import { daysBetweenISO, formatRUB } from '../_shared/parser.js';
+import { constantTimeEqual, inlineKeyboard, sendMessage } from '../_shared/telegram.js';
+import { daysBetweenISO } from '../_shared/parser.js';
+import { relativeDay, renderBudgetAlert, renderCreditAlert, renderRecurringAlert, renderWeeklyDigest } from '../_shared/render.js';
 
 const DEFAULT_PREFS = {
   notifications_enabled: true, credit_reminders: true, recurring_reminders: true,
@@ -39,11 +40,16 @@ function minimumCardPayment(card) {
   const used = Math.max(0, Number(card.used || 0));
   return Math.min(used, Math.round(used * Number(card.minPaymentPercent || 0)) / 100);
 }
-async function claimAndSend(db, userId, chatId, eventKey, text) {
+/* Кнопки под уведомлением открывают нужный раздел бота одним нажатием */
+const actions = (...pairs) => ({ reply_markup: inlineKeyboard([pairs.map(([text, command]) => ({ text, callback_data: `menu:${command}` }))]) });
+const PAYMENT_ACTIONS = actions(['🗓 Платежи', 'upcoming'], ['🏦 Кредиты', 'credits']);
+const BUDGET_ACTIONS = actions(['🎯 Бюджеты', 'budget'], ['📆 Месяц', 'month']);
+const DIGEST_ACTIONS = actions(['📆 Месяц', 'month'], ['🎯 Бюджеты', 'budget']);
+async function claimAndSend(db, userId, chatId, eventKey, text, extra = {}) {
   const claimed = resultOrThrow(await db.rpc('claim_telegram_notification', { p_user_id: userId, p_event_key: eventKey }));
   if (!claimed) return false;
   try {
-    await sendMessage(chatId, text);
+    await sendMessage(chatId, text, extra);
     resultOrThrow(await db.rpc('mark_telegram_notification_sent', { p_user_id: userId, p_event_key: eventKey }));
     return true;
   } catch (error) {
@@ -80,9 +86,9 @@ async function deliverCreditAlerts(db, userId, chatId, profile, prefs, today, co
     if (delta === null || (delta < 0 ? delta < -30 : !reminderDays.includes(delta))) continue;
     const kind = delta < 0 ? 'overdue' : `d${delta}`;
     const eventKey = `credit:${item.id}:${item.date}:${kind}`;
-    const wording = delta < 0 ? `Платёж просрочен с ${labelDate(item.date)}.` : delta === 0 ? 'Срок платежа сегодня.' : `До платежа ${delta} ${delta === 1 ? 'день' : 'дня'}.`;
+    const wording = delta < 0 ? `🔴 Платёж просрочен с ${labelDate(item.date)}.` : delta === 0 ? '🟠 Срок платежа — <b>сегодня</b>.' : `📅 Платёж ${relativeDay(delta)} · ${labelDate(item.date)}.`;
     const sent = await claimAndSend(db, userId, chatId, eventKey,
-      `🔔 <b>${escapeHtml(item.name)}</b>\n${wording}\nСумма: <b>${formatRUB(item.amount)}</b>\n\nПроверьте график платежей в приложении.`);
+      renderCreditAlert({ name: item.name, wording, amount: item.amount, urgent: delta <= 0 }), PAYMENT_ACTIONS);
     if (sent) counts.credit += 1;
   }
 }
@@ -96,9 +102,9 @@ async function deliverRecurringAlerts(db, userId, chatId, profile, prefs, today,
     if (delta === null || (delta < 0 ? delta < -7 : !reminderDays.includes(delta))) continue;
     const kind = delta < 0 ? 'overdue' : `d${delta}`;
     const eventKey = `recurring:${payment.id || payment.name}:${date}:${kind}`;
-    const timing = delta < 0 ? `Платёж просрочен с ${labelDate(date)}.` : delta === 0 ? 'Списание запланировано на сегодня.' : `До списания ${delta} ${delta === 1 ? 'день' : 'дня'}.`;
+    const timing = delta < 0 ? `🔴 Платёж просрочен с ${labelDate(date)}.` : delta === 0 ? '🟠 Списание запланировано на <b>сегодня</b>.' : `📅 Списание ${relativeDay(delta)} · ${labelDate(date)}.`;
     const sent = await claimAndSend(db, userId, chatId, eventKey,
-      `⏰ <b>${escapeHtml(payment.name || 'Регулярный платёж')}</b>\n${timing}\nСумма: <b>${formatRUB(payment.amount)}</b>\nКатегория: ${escapeHtml(payment.category || 'Другое')}`);
+      renderRecurringAlert({ name: payment.name || 'Регулярный платёж', timing, amount: payment.amount, category: payment.category }), PAYMENT_ACTIONS);
     if (sent) counts.recurring += 1;
   }
 }
@@ -120,9 +126,8 @@ async function deliverBudgetAlerts(db, userId, chatId, profile, prefs, today, co
     const threshold = percent >= 100 ? 100 : percent >= 80 ? 80 : 0;
     if (!threshold) continue;
     const eventKey = `budget:${budget.period}:${budget.from}:${budget.category}:${threshold}`;
-    const line = threshold === 100 ? 'Лимит исчерпан или превышен.' : 'Использовано не менее 80% лимита.';
     const sent = await claimAndSend(db, userId, chatId, eventKey,
-      `📊 <b>Бюджет · ${escapeHtml(budget.category)}</b>\n${line}\nПотрачено ${formatRUB(budget.spent)} из ${formatRUB(budget.limit)} (${Math.floor(percent)}%).`);
+      renderBudgetAlert({ category: budget.category, spent: budget.spent, limit: budget.limit, threshold, period: budget.period }), BUDGET_ACTIONS);
     if (sent) counts.budget += 1;
   }
 }
@@ -132,14 +137,7 @@ async function deliverWeeklyDigest(db, userId, chatId, prefs, today, counts) {
   const eventKey = `digest:week:${start}`;
   const rows = await getMonthOperations(db, userId, start, today);
   if (!rows.length) return;
-  const income = rows.reduce((sum, row) => sum + (row.type === 'income' ? Number(row.amount) : 0), 0);
-  const expense = rows.reduce((sum, row) => sum + (row.type === 'expense' ? Number(row.amount) : 0), 0);
-  const categories = new Map();
-  for (const row of rows) if (row.type === 'expense') categories.set(row.category, (categories.get(row.category) || 0) + Number(row.amount));
-  const top = [...categories].sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const lines = [`🗓 <b>Итоги недели · ${labelDate(start)} — ${labelDate(today)}</b>`, `Доходы: ${formatRUB(income)}`, `Расходы: ${formatRUB(expense)}`, `Баланс: <b>${formatRUB(income - expense)}</b>`];
-  if (top.length) lines.push('', '<b>Крупные категории</b>', ...top.map(([category, amount]) => `• ${escapeHtml(category)} — ${formatRUB(amount)}`));
-  const sent = await claimAndSend(db, userId, chatId, eventKey, lines.join('\n'));
+  const sent = await claimAndSend(db, userId, chatId, eventKey, renderWeeklyDigest({ from: start, to: today, rows }), DIGEST_ACTIONS);
   if (sent) counts.digest += 1;
 }
 async function processAccount(db, account, prefsRow, profileRow, now, counts) {

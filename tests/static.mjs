@@ -56,7 +56,7 @@ const modules = [
   'src/credits.js', 'src/csv.js', 'src/zip.js', 'src/charts.js', 'src/cloud.js',
   'src/ui.js', 'src/views.js', 'src/views2.js', 'src/views3.js', 'src/app.js',
   'supabase/functions/_shared/supabase.js', 'supabase/functions/_shared/telegram.js',
-  'supabase/functions/_shared/parser.js', 'supabase/functions/telegram-webhook/index.js',
+  'supabase/functions/_shared/parser.js', 'supabase/functions/_shared/render.js', 'supabase/functions/telegram-webhook/index.js',
   'supabase/functions/telegram-notifications/index.js', 'supabase/functions/telegram-info/index.js',
   'scripts/set-telegram-webhook.mjs'
 ];

@@ -1,7 +1,7 @@
 /* FinTrack AI — сервис-воркер: офлайн-доступ к приложению.
    Стратегия: приложение кэшируется целиком (это один HTML-файл),
    запросы к Supabase идут в сеть и не кэшируются. */
-const CACHE = 'fintrack-v2.5.0';
+const CACHE = 'fintrack-v2.6.0';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'favicon.svg', 'logo.png',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
