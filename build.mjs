@@ -9,8 +9,9 @@
    ========================================================================== */
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const root = path.dirname(new URL(import.meta.url).pathname);
+const root = path.dirname(fileURLToPath(import.meta.url));
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 
 const ORDER = [
@@ -30,12 +31,13 @@ const ORDER = [
   'src/app.js'
 ];
 
-const css = read('src/styles.css');
+const css = read('src/styles.css').trimEnd();
 const parts = ORDER.map(f => {
   const code = read(f);
   if (/<\/script/i.test(code)) throw new Error('Файл ' + f + ' содержит </script> — нельзя инлайнить');
   return `/* ===== ${f} ===== */\n${code}`;
 });
+const version = read('VERSION').trim();
 const js = parts.join('\n;\n');
 let html = read('template.html');
 
@@ -44,13 +46,19 @@ guard('/*CSS*/'); guard('/*VENDOR*/'); guard('/*APP*/');
 
 html = html
   .replace('/*CSS*/', () => css)
-  .replace('/*VENDOR*/', () => js.split('/* ===== src/format.js ===== */')[0].replace(/\/\* ===== src\/vendor\/supabase\.js ===== \*\//, ''))
-  .replace('/*APP*/', () => '/* ===== src/format.js ===== */' + js.split('/* ===== src/format.js ===== */')[1]);
+  .replace('/*VENDOR*/', () => `const APP_VERSION = '${version}';\n` + js.split('/* ===== src/format.js ===== */')[0].replace(/\/\* ===== src\/vendor\/supabase\.js ===== \*\//, ''))
+  .replace('/*APP*/', () => '/* ===== src/format.js ===== */' + js.split('/* ===== src/format.js ===== */')[1])
+  .replaceAll('__APP_VERSION__', read('VERSION').trim());
 
 // маркер для тестов: сюда подменяется заглушка Supabase
 html = html.replace('<script>\n/* ===== src/format.js ===== */', '<!--TEST-STUB-->\n<script>\n/* ===== src/format.js ===== */');
 
 fs.writeFileSync(path.join(root, 'index.html'), html);
+
+// Отдельный автономный файл демо. Флаг задаётся до запуска основного скрипта,
+// поэтому файл работает и при открытии напрямую через file://.
+const demoHtml = html.replace('<!--TEST-STUB-->', '<!--TEST-STUB--><script>window.__FINTRACK_DEMO__ = true;</script>');
+fs.writeFileSync(path.join(root, 'FinTrack-AI-demo.html'), demoHtml);
 
 const kb = n => (n / 1024).toFixed(0) + ' КБ';
 console.log('index.html собран:');

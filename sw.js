@@ -1,7 +1,7 @@
 /* FinTrack AI — сервис-воркер: офлайн-доступ к приложению.
    Стратегия: приложение кэшируется целиком (это один HTML-файл),
    запросы к Supabase идут в сеть и не кэшируются. */
-const CACHE = 'fintrack-v2.3.0';
+const CACHE = 'fintrack-v2.5.0';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'favicon.svg', 'logo.png',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
@@ -9,7 +9,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

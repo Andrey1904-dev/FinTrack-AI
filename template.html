@@ -16,7 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#070b16">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <style>
 /*CSS*/
@@ -52,12 +52,30 @@ try{
      ========================================================================== -->
 </head>
 <body>
+<a class="skip-link" href="#view">Перейти к содержимому</a>
 
 <!-- ===================== ВХОД ===================== -->
 <div id="authScreen" class="auth hidden">
-  <div class="card" style="width:min(440px,100%)">
+  <section class="auth-layout">
+    <aside class="auth-promo">
+      <div class="auth-brand"><img src="logo.png" alt=""><span>FinTrack<small>ЛИЧНЫЕ ФИНАНСЫ</small></span></div>
+      <div class="auth-copy">
+        <div class="eyebrow">Финансовая ясность каждый день</div>
+        <h1>Деньги под контролем.<br><span>Без лишнего шума.</span></h1>
+        <p>Соберите расходы, цели и обязательные платежи в одной спокойной и понятной картине.</p>
+      </div>
+      <div class="auth-preview" aria-hidden="true">
+        <div class="auth-preview-top"><span>Сводка за месяц</span><span class="auth-live-dot">● ДЕМО</span></div>
+        <div class="auth-preview-balance">84 250 ₽</div>
+        <div class="auth-preview-label">свободный остаток</div>
+        <div class="auth-preview-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="auth-preview-foot"><span><i class="dot income-dot"></i> Доходы</span><b>+126 400 ₽</b><span><i class="dot expense-dot"></i> Расходы</span><b>−42 150 ₽</b></div>
+      </div>
+      <div class="auth-trust"><span>⌁</span> Ваши данные — ваши решения</div>
+    </aside>
+    <div class="card auth-card" style="width:min(440px,100%)">
     <div class="row gap12">
-      <div class="auth-logo">↗</div>
+      <div class="auth-logo"><img src="logo.png" alt=""></div>
       <div><div class="bold" style="font-size:20px">FinTrack AI</div><div class="muted tiny">ЛИЧНЫЕ ФИНАНСЫ</div></div>
     </div>
     <div class="mt24">
@@ -82,37 +100,40 @@ try{
       </div>
       <div id="authMsg" class="msg hidden"></div>
     </div>
-    <div class="muted tiny mt24">Пароль не хранится в приложении — вход выполняет Supabase Auth. Публичный ключ в коде безопасен: строки защищены правилами RLS.</div>
-  </div>
+    <div class="muted tiny mt24">Пароль обрабатывает Supabase Auth. Доступ к финансовым данным зависит от политик безопасности базы вашего проекта.</div>
+    </div>
+  </section>
 </div>
 
 <!-- ===================== ПРИЛОЖЕНИЕ ===================== -->
 <div id="app" class="app hidden">
   <aside class="sidebar">
-    <div class="brand"><div class="logo">↗</div><div>FinTrack<small>AI FINANCE</small></div></div>
+    <a class="brand" href="./" aria-label="FinTrack — на главную"><img class="brand-mark" src="logo.png" alt=""><span>FinTrack<small>ЛИЧНЫЕ ФИНАНСЫ</small></span></a>
+    <div class="nav-label">Рабочее пространство</div>
     <nav class="nav" id="navSide" aria-label="Разделы"></nav>
     <div class="sidebar-bottom">
+      <div class="sidebar-caption">СИНХРОНИЗАЦИЯ</div>
       <div class="sync-bar" id="syncBar">Готово</div>
       <div class="muted tiny mt8 full-only">Подсказки: <span class="kbd">N</span> — новая операция, <span class="kbd">/</span> — поиск, <span class="kbd">?</span> — справка</div>
     </div>
   </aside>
   <main class="main">
     <div class="nav-mobile" id="navMobile"></div>
-    <header class="row between wrap gap12 mb16">
-      <div>
+    <header class="app-header">
+      <div class="header-copy">
         <div class="eyebrow" id="todayLabel"></div>
-        <h1 style="font-size:25px">Финансы под контролем</h1>
-        <div class="muted small">Сайт и Telegram-бот — один аккаунт и одни цифры</div>
+        <h1 id="pageTitle">Финансы под контролем</h1>
+        <div class="muted small" id="pageSubtitle">Ваши деньги, цели и планы — в одном месте</div>
       </div>
-      <div class="row gap8 wrap">
-        <span class="tag" id="accountLine"></span>
-        <span class="tag blue" id="monthLabel"></span>
-        <button class="btn primary" data-act="op-new">＋ Операция</button>
+      <div class="header-actions">
+        <span class="tag account-tag" id="accountLine"></span>
+        <span class="tag blue month-tag" id="monthLabel"></span>
+        <button class="btn primary header-create" data-act="op-new"><span aria-hidden="true">＋</span> Новая операция</button>
       </div>
     </header>
     <div id="bannerHost"></div>
     <div id="view"></div>
-    <div class="center muted tiny mt24">FinTrack AI 2.0 · данные в вашем Supabase · экспорт и импорт всегда доступны</div>
+    <div class="center muted tiny mt24">FinTrack AI __APP_VERSION__ · данные в вашем Supabase · экспорт и импорт всегда доступны</div>
   </main>
 </div>
 
