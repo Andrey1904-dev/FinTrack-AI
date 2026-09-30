@@ -58,7 +58,7 @@ function renderBanner(){
     <button class="btn sm ghost" data-act="logout-anyway">Выйти</button></div>`);
   else if (S.sync.state === 'offline') parts.push(`<div class="banner">📴 Нет связи с сервером — показываю сохранённую копию от ${escapeHtml(new Date(S.sync.offlineSnapshotAt || Date.now()).toLocaleString('ru-RU'))}.
     Изменения сохранятся и уйдут в облако автоматически. <button class="btn sm" data-act="retry-sync" style="margin-left:auto">Повторить</button></div>`);
-  else if (S.sync.pending) parts.push(`<div class="banner">⏳ ${S.sync.pending} ${plural(S.sync.pending, 'изменение ждёт', 'изменения ждут', 'изменений ждут')} отправки в облако.
+  else if (S.sync.pending) parts.push(`<div class="banner">⏳ ${S.sync.pending} ${plural(S.sync.pending, 'изменение ждёт', 'изменения ждут', 'изменений ждут')} отправки в облако. Повторяю каждые 5 секунд${S.sync.state === 'pending' && S.sync.message ? ` · причина: ${escapeHtml(S.sync.message)}` : ''}.
     <button class="btn sm" data-act="retry-sync" style="margin-left:auto">Отправить сейчас</button></div>`);
   host.innerHTML = parts.join('');
 }
