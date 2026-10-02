@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 225 22% 6%;
+  --surface: 225 18% 9%;
+  --raised: 225 16% 13%;
+  --line: 225 13% 19%;
+  --fg: 220 22% 93%;
+  --muted: 222 9% 62%;
+  --accent: 226 95% 74%;
+  --good: 152 52% 52%;
+  --bad: 2 72% 67%;
+  --warn: 38 82% 60%;
+  color-scheme: dark;
+}
+
+@layer base {
+  * { @apply border-line; -webkit-tap-highlight-color: transparent; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+    font-feature-settings: 'cv11', 'ss01', 'tnum';
+    overscroll-behavior-y: none;
+  }
+  ::selection { background: hsl(var(--accent) / .3); }
+  input, select, textarea, button { font: inherit; }
+  :focus-visible { outline: 2px solid hsl(var(--accent) / .7); outline-offset: 2px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--line)); border-radius: 8px; border: 2px solid hsl(var(--bg)); }
+  input[type='range'] { accent-color: hsl(var(--accent)); }
+  input[type='date']::-webkit-calendar-picker-indicator { filter: invert(.7); }
+}
+
+@layer components {
+  .card { @apply rounded-xl border border-line bg-surface; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .skeleton { @apply relative overflow-hidden rounded-md bg-raised; }
+  .skeleton::after {
+    content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, hsl(var(--fg) / .06), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
