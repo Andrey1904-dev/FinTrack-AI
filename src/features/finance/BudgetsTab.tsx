@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import { useCategoryOptions } from '@/data/categories';
 import { useFinanceProfile, useProfile, useRows } from '@/data/hooks';
 import { byCategory, calcMonthlyBudget, calcMonthlyBudgetActuals } from '@/lib/calc';
+import { useSalaryData } from '@/data/useSalary';
 import { monthKey, monthStart, todayISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { fmtMonth, money, num, pct } from '@/lib/format';
@@ -42,9 +43,18 @@ export function BudgetsTab() {
   const [limit, setLimit] = useState('');
   const budgets = useMemo(() => financeProfile?.budgets ?? {}, [financeProfile]);
   const spent = useMemo(() => new Map(byCategory(ops.rows, 'expense', month).map(c => [c.category, c.value])), [ops.rows, month]);
-  const plan = useMemo(() => profile?.settings?.monthly_budgets?.[month] ?? {
-    expected_income: 0, mandatory_expenses: 0, debt_payment: 0, savings_target: 0,
-  }, [profile, month]);
+  const { familySummary } = useSalaryData(month);
+
+  const plan = useMemo(() => {
+    const existing = profile?.settings?.monthly_budgets?.[month];
+    const defaultIncome = familySummary.forecast > 0 ? familySummary.forecast : 0;
+    return existing ?? {
+      expected_income: defaultIncome,
+      mandatory_expenses: 0,
+      debt_payment: 0,
+      savings_target: 0,
+    };
+  }, [profile, month, familySummary.forecast]);
   const actuals = useMemo(() => calcMonthlyBudgetActuals(ops.rows, debtPayments.rows, month), [ops.rows, debtPayments.rows, month]);
   const planLines = useMemo(() => calcMonthlyBudget(plan, actuals), [plan, actuals]);
   const [draft, setDraft] = useState<Partial<Record<keyof MonthlyBudgetPlan, string>>>({});

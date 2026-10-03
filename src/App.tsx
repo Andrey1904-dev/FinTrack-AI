@@ -13,6 +13,7 @@ import { AppShell } from '@/features/layout/AppShell';
 const Dashboard = lazy(() => import('@/features/dashboard/Dashboard'));
 const TodayPage = lazy(() => import('@/features/today/TodayPage'));
 const FinancePage = lazy(() => import('@/features/finance/FinancePage'));
+const SalaryPage = lazy(() => import('@/features/salary/SalaryPage'));
 const DebtsPage = lazy(() => import('@/features/debts/DebtsPage'));
 const CarsPage = lazy(() => import('@/features/cars/CarsPage'));
 const CarCalcPage = lazy(() => import('@/features/calc/CarCalcPage'));
@@ -77,6 +78,7 @@ function Gate() {
           <Route index element={<Dashboard />} />
           <Route path="today" element={<TodayPage />} />
           <Route path="finance" element={<FinancePage />} />
+          <Route path="salary" element={<SalaryPage />} />
           <Route path="debts" element={<DebtsPage />} />
           <Route path="cars" element={<CarsPage />} />
           <Route path="calc" element={<CarCalcPage />} />

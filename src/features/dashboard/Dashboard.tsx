@@ -19,8 +19,10 @@ import { fmtDateLong, fmtMonthShort, greeting, money, pct, relativeDays } from '
 import { cn } from '@/lib/utils';
 import type { DashboardConfig } from '@/types';
 import { CashFlowDashboardCard } from '@/features/finance/CashFlowPanel';
+import { SalaryDashboardCard } from '@/features/salary/SalaryDashboardCard';
 
 export const BLOCKS: Array<{ id: string; label: string }> = [
+  { id: 'salary', label: 'Зарплата' },
   { id: 'finance', label: 'Финансы' },
   { id: 'cashflow', label: 'Денежный прогноз' },
   { id: 'upcoming', label: 'Ближайшие платежи' },
@@ -353,6 +355,7 @@ function CommandsBlock() {
 }
 
 const RENDER: Record<string, () => ReactNode> = {
+  salary: () => <SalaryDashboardCard />,
   finance: () => <FinanceBlock />,
   cashflow: () => <CashFlowDashboardCard />,
   upcoming: () => <UpcomingBlock />,
@@ -363,7 +366,7 @@ const RENDER: Record<string, () => ReactNode> = {
   learning: () => <LearningBlock />,
   commands: () => <CommandsBlock />,
 };
-const FULL_WIDTH = new Set(['finance']);
+const FULL_WIDTH = new Set(['salary', 'finance']);
 
 /* ============================ DASHBOARD ============================ */
 

@@ -242,6 +242,38 @@ export function renderUpcoming(items) {
   return lines.join('\n');
 }
 
+export function renderSalarySummary({ myEarned, myForecast, girlEarned, girlForecast, familyForecast }) {
+  const lines = [
+    '💰 <b>Зарплата</b>',
+    RULE,
+    '<b>Моя:</b>',
+    `Заработано: <b>${money(myEarned)}</b>`,
+    `Прогноз: <b>${money(myForecast)}</b>`,
+    '',
+    '<b>Девушка:</b>',
+    `Заработано: <b>${money(girlEarned)}</b>`,
+    `Прогноз: <b>${money(girlForecast)}</b>`,
+    '',
+    RULE,
+    `Общий прогноз: <b>${money(familyForecast)}</b>`,
+  ];
+  return lines.join('\n');
+}
+
+export function renderHourCard({ hours, date, rate, earned, profileName }) {
+  const lines = [
+    `⏱️ <b>${escapeHtml(profileName || 'Моя зарплата')}</b>`,
+    RULE,
+    `📅 Дата: <b>${escapeHtml(dateLabel(date))}</b>`,
+    `⏳ Отработано: <b>${hours} ч</b>`,
+    `💵 Ставка: <b>${money(rate)}/час</b>`,
+    `💰 Начислено: <b>${money(earned)}</b>`,
+    '',
+    'Подтвердите сохранение рабочих часов:'
+  ];
+  return lines.join('\n');
+}
+
 /* ---------- настройки ---------- */
 export function renderPreferences() {
   return `🔔 <b>Уведомления FinTrack</b>\n${RULE}\nВключайте только нужное. Кредитные напоминания приходят за 3 дня, за день и в день платежа, в 09:00–21:00 по вашему часовому поясу.`;

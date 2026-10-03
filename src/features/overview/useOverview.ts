@@ -18,13 +18,27 @@ export function useOverview() {
   const tasks = useRows('tasks');
   const tracks = useRows('learning_tracks');
   const topics = useRows('learning_topics');
-  const all = [ops, recurring, debts, cars, reminders, goals, tasks, tracks, topics];
+  const salaryProfiles = useRows('salary_profiles');
+  const salaryWorkDays = useRows('salary_work_days');
+  const salaryRates = useRows('salary_rates');
+  const salaryPayments = useRows('salary_payments');
+  const all = [ops, recurring, debts, cars, reminders, goals, tasks, tracks, topics, salaryProfiles, salaryWorkDays, salaryRates, salaryPayments];
   const loading = all.some(q => q.isLoading);
   const error = all.find(q => q.error)?.error ?? null;
 
   const data = useMemo(() => {
     const stats = monthStats(ops.rows, monthKey(today));
-    const sources = { recurring: recurring.rows, debts: debts.rows, reminders: reminders.rows, cars: cars.rows, goals: goals.rows };
+    const sources = {
+      recurring: recurring.rows,
+      debts: debts.rows,
+      reminders: reminders.rows,
+      cars: cars.rows,
+      goals: goals.rows,
+      salaryProfiles: salaryProfiles.rows,
+      salaryWorkDays: salaryWorkDays.rows,
+      salaryRates: salaryRates.rows,
+      salaryPayments: salaryPayments.rows,
+    };
     const events: CalendarEvent[] = buildEvents(sources, today, addDaysISO(today, 31), today);
     const dueToday = tasks.rows.filter((t: Task) => t.status === 'todo' && t.due_date !== null && t.due_date <= today);
     const doneToday = tasks.rows.filter((t: Task) => t.status === 'done' && t.completed_at && t.completed_at.slice(0, 10) === today);
@@ -39,7 +53,10 @@ export function useOverview() {
       doneToday,
       dayTotal: dueToday.length + doneToday.length,
     };
-  }, [ops.rows, recurring.rows, debts.rows, cars.rows, reminders.rows, goals.rows, tasks.rows, today]);
+  }, [
+    ops.rows, recurring.rows, debts.rows, cars.rows, reminders.rows, goals.rows, tasks.rows,
+    salaryProfiles.rows, salaryWorkDays.rows, salaryRates.rows, salaryPayments.rows, today
+  ]);
 
   const refetch = () => Promise.all(all.map(q => q.refetch()));
   return {
@@ -56,5 +73,9 @@ export function useOverview() {
     tasks: tasks.rows,
     tracks: tracks.rows,
     topics: topics.rows,
+    salaryProfiles: salaryProfiles.rows,
+    salaryWorkDays: salaryWorkDays.rows,
+    salaryRates: salaryRates.rows,
+    salaryPayments: salaryPayments.rows,
   };
 }

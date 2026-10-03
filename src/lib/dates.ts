@@ -15,8 +15,10 @@ export function todayISO(now: Date = new Date()): string {
   return toISO(now);
 }
 
-export function isISO(v: unknown): v is string {
-  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v);
+export function isWeekend(iso: string): boolean {
+  const d = fromISO(iso);
+  const day = d.getDay();
+  return day === 0 || day === 6; // Sunday (0) or Saturday (6)
 }
 
 export function daysInMonth(year: number, month0: number): number {
