@@ -127,7 +127,7 @@ export default function CarCalcPage() {
   const chosen = picked.map(id => mine.find(s => s.id === id)).filter((s): s is Scenario<CarScenarioParams> => !!s);
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Автокалькулятор"
         code={codeFor('/calc')}

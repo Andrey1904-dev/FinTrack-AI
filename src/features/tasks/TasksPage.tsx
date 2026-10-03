@@ -93,7 +93,7 @@ export default function TasksPage() {
   );
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Задачи"
         code={codeFor('/tasks')}

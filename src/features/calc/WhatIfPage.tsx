@@ -123,7 +123,7 @@ export default function WhatIfPage() {
   const share = r.obligationShare * 100;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="What-if"
         code={codeFor('/whatif')}

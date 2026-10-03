@@ -167,7 +167,7 @@ function DangerZone() {
 
 export default function SettingsPage() {
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader title="Настройки" code={codeFor('/settings')} subtitle="Профиль, уведомления, Telegram, экспорт данных и опасная зона" />
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <div className="space-y-4">

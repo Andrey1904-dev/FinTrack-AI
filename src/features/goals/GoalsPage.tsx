@@ -148,7 +148,7 @@ export default function GoalsPage() {
   }, [rows, filter]);
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Цели"
         code={codeFor('/goals')}

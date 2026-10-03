@@ -11,7 +11,7 @@ export default function NotificationsPage() {
   const read = items.length - unread;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Уведомления"
         code={codeFor('/notifications')}

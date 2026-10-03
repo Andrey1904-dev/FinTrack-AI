@@ -86,7 +86,10 @@ export function Field({
   );
 }
 
-/** Segmented switch (instrument toggle). Scrolls horizontally when it must. */
+/**
+ * Segmented switch (instrument toggle). Scrolls horizontally when it must.
+ * Semantically a radio group — these switch a view filter, they are not tabs.
+ */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -100,18 +103,33 @@ export function Segmented<T extends string>({
   className?: string;
   ariaLabel?: string;
 }) {
+  const step = (dir: 1 | -1) => {
+    const i = options.findIndex(o => o.value === value);
+    if (i < 0) return;
+    onChange(options[(i + dir + options.length) % options.length].value);
+  };
   return (
     <div
-      role="tablist"
+      role="radiogroup"
       aria-label={ariaLabel}
+      onKeyDown={e => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          step(1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          step(-1);
+        }
+      }}
       className={cn('no-bar flex overflow-x-auto rounded-[2px] border border-line bg-ink p-0.5', className)}
     >
       {options.map(o => (
         <button
           key={o.value}
           type="button"
-          role="tab"
-          aria-selected={value === o.value}
+          role="radio"
+          aria-checked={value === o.value}
+          tabIndex={value === o.value ? 0 : -1}
           onClick={() => onChange(o.value)}
           className={cn(
             'h-10 flex-1 whitespace-nowrap rounded-[2px] px-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors lg:h-8',

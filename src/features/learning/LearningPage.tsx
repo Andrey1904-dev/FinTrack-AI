@@ -173,7 +173,7 @@ export default function LearningPage() {
   );
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Обучение"
         code={codeFor('/learning')}

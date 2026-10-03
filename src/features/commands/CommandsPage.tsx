@@ -137,7 +137,7 @@ export default function CommandsPage() {
   };
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Команды"
         code={codeFor('/commands')}

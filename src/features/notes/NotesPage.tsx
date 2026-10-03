@@ -52,7 +52,7 @@ export default function NotesPage() {
   const pinned = rows.filter(n => n.pinned).length;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Заметки"
         code={codeFor('/notes')}

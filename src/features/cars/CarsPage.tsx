@@ -195,7 +195,7 @@ export default function CarsPage() {
   const needService = car && myReminders.some(r => r.kind === 'mileage' && r.status !== 'done' && (r.due_mileage ?? 0) - car.mileage < 1000);
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fadein">
       <PageHeader
         title="Авто"
         code={codeFor('/cars')}

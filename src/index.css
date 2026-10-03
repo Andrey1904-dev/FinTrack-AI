@@ -227,8 +227,7 @@
   }
 
   /* --- instrument panel --- */
-  .panel,
-  .card {
+  .panel {
     background: linear-gradient(180deg, rgb(28 35 39 / 0.62) 0%, rgb(22 27 30 / 0.62) 100%);
     border: 1px solid var(--line);
     border-radius: 3px;
