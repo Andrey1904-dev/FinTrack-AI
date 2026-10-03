@@ -9,3 +9,4 @@ export * from './events';
 export * from './notify';
 export * from './cashflow';
 export * from './budget';
+export * from './salary';

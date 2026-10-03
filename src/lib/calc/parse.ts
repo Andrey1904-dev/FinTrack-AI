@@ -1,3 +1,5 @@
+import { addDaysISO, todayISO } from '../dates';
+
 export interface QuickEntry {
   type: 'income' | 'expense';
   amount: number;
@@ -27,6 +29,67 @@ const CATEGORY_WORDS: Array<[RegExp, string]> = [
 ];
 
 const CAR_CATEGORIES = new Set(['Топливо', 'Автомобиль']);
+
+export interface QuickSalaryEntry {
+  type: 'salary_hours' | 'salary_shift';
+  profileTarget?: 'me' | 'girl' | 'any';
+  hours?: number;
+  cases?: number;
+  date: string; // YYYY-MM-DD
+  rawText: string;
+}
+
+/**
+ * Recognizes phrases like:
+ * "8 часов сегодня", "7 часов сегодня", "отработал 8 часов", "вчера 6 часов", "+8 часов"
+ * "350 чехлов", "400 чехлов сегодня"
+ */
+export function parseSalaryQuickEntry(text: string, today: string = todayISO()): QuickSalaryEntry | null {
+  const raw = text.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!raw) return null;
+
+  // Date detection
+  let date = today;
+  if (/вчера/.test(raw)) {
+    date = addDaysISO(today, -1);
+  } else if (/позавчера/.test(raw)) {
+    date = addDaysISO(today, -2);
+  } else if (/завтра/.test(raw)) {
+    date = addDaysISO(today, 1);
+  }
+
+  // Check girl piecework: "350 чехлов", "чехлы 400", "420 шт"
+  const caseMatch = raw.match(/(\d+)\s*(?:чехл\w*|чехлов|шт)/) || raw.match(/(?:чехл\w*)\s*(\d+)/);
+  if (caseMatch) {
+    const cases = parseInt(caseMatch[1], 10);
+    if (!Number.isNaN(cases) && cases >= 0) {
+      return {
+        type: 'salary_shift',
+        profileTarget: 'girl',
+        cases,
+        date,
+        rawText: text,
+      };
+    }
+  }
+
+  // Check hours: "8 часов", "8ч", "+8 часов", "отработал 7.5 часов", "7 часов сегодня"
+  const hoursMatch = raw.match(/([+]?\d+(?:[.,]\d+)?)\s*(?:час\w*|ч\b)/) || raw.match(/(?:отработал\w*)\s*(\d+(?:[.,]\d+)?)/);
+  if (hoursMatch) {
+    const hours = parseFloat(hoursMatch[1].replace(',', '.').replace('+', ''));
+    if (!Number.isNaN(hours) && hours >= 0) {
+      return {
+        type: 'salary_hours',
+        profileTarget: 'me',
+        hours,
+        date,
+        rawText: text,
+      };
+    }
+  }
+
+  return null;
+}
 
 /** "+1200 бензин" / "1200 кофе" / "зарплата 150000" -> structured entry, or null when no amount is found. */
 export function parseQuickEntry(text: string): QuickEntry | null {

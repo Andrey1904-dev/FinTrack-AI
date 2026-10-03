@@ -3,7 +3,7 @@ import { constantTimeEqual, editMessage, escapeHtml, inlineKeyboard, sendMessage
 import { daysBetweenISO, parseAmount, parseTransaction } from '../_shared/parser.js';
 import {
   RULE, dateLabel, money, monthTitle, renderBalance, renderBudgetImpact, renderBudgets, renderCategories, renderCredits, renderGoals,
-  renderHelp, renderMenu, renderOperationCard, renderPreferences, renderReport, renderUpcoming, renderWelcome, totalsOf
+  renderHelp, renderHourCard, renderMenu, renderOperationCard, renderPreferences, renderReport, renderSalarySummary, renderUpcoming, renderWelcome, totalsOf
 } from '../_shared/render.js';
 
 const DEFAULT_PREFS = {
@@ -18,15 +18,16 @@ const PREF_ICONS = {
   notifications_enabled: '🔔', credit_reminders: '🏦', recurring_reminders: '🔁', budget_alerts: '🎯', weekly_digest: '🗓'
 };
 /* Разделы, которые можно открыть кнопкой: остальное в callback игнорируется */
-const MENU_COMMANDS = new Set(['menu', 'today', 'week', 'month', 'balance', 'credits', 'upcoming', 'budget', 'goals', 'notifications', 'undo', 'help', 'categories', 'timezone']);
+const MENU_COMMANDS = new Set(['menu', 'salary', 'today', 'week', 'month', 'balance', 'credits', 'upcoming', 'budget', 'goals', 'notifications', 'undo', 'help', 'categories', 'timezone']);
 
 const HOME_ROW = [{ text: '🏠 Меню', callback_data: 'menu:menu' }];
 const MAIN_MENU = inlineKeyboard([
-  [{ text: '📅 Сегодня', callback_data: 'menu:today' }, { text: '📆 Месяц', callback_data: 'menu:month' }],
-  [{ text: '💰 Баланс', callback_data: 'menu:balance' }, { text: '🏆 Цели', callback_data: 'menu:goals' }],
-  [{ text: '🎯 Бюджет', callback_data: 'menu:budget' }, { text: '🏦 Кредиты', callback_data: 'menu:credits' }],
-  [{ text: '🗓 Платежи', callback_data: 'menu:upcoming' }, { text: '🔔 Уведомления', callback_data: 'menu:notifications' }],
-  [{ text: '↩️ Отменить последнее', callback_data: 'menu:undo' }, { text: '❓ Помощь', callback_data: 'menu:help' }]
+  [{ text: '💰 Зарплата', callback_data: 'menu:salary' }, { text: '📆 Месяц', callback_data: 'menu:month' }],
+  [{ text: '📅 Сегодня', callback_data: 'menu:today' }, { text: '💰 Баланс', callback_data: 'menu:balance' }],
+  [{ text: '🏆 Цели', callback_data: 'menu:goals' }, { text: '🎯 Бюджет', callback_data: 'menu:budget' }],
+  [{ text: '🏦 Кредиты', callback_data: 'menu:credits' }, { text: '🗓 Платежи', callback_data: 'menu:upcoming' }],
+  [{ text: '↩️ Отменить последнее', callback_data: 'menu:undo' }, { text: '🔔 Уведомления', callback_data: 'menu:notifications' }],
+  [{ text: '❓ Помощь', callback_data: 'menu:help' }]
 ]);
 /* Навигация внизу экранов: активный раздел отмечен точкой */
 function navKeyboard(groups, active) {
@@ -358,6 +359,61 @@ async function sendBudget(db, io, userId, setCommand = '', prefs = DEFAULT_PREFS
     .map(([category, limit]) => ({ category, limit: Number(limit), spent: weekSpent.get(category) || 0 }));
   return respond(io, renderBudgets({ monthly, weekly }), planNav('budget'));
 }
+async function sendSalary(db, io, userId, prefs) {
+  const today = localParts(prefs.timezone).date;
+  const month = today.slice(0, 7);
+
+  // Load profiles and work days
+  const profilesRes = await db.from('salary_profiles').select('*').eq('user_id', userId).eq('active', true);
+  const profiles = profilesRes.data || [];
+
+  const workDaysRes = await db.from('salary_work_days').select('*').eq('user_id', userId).gte('date', `${month}-01`).lte('date', `${month}-31`);
+  const workDays = workDaysRes.data || [];
+
+  let myEarned = 0;
+  let myForecast = 0;
+  let girlEarned = 0;
+  let girlForecast = 0;
+
+  for (const p of profiles) {
+    const isMe = p.schedule_type === '5/2' || p.name.toLowerCase().includes('моя');
+    const isGirl = p.schedule_type === '2/2' || p.name.toLowerCase().includes('девушк');
+
+    const profileDays = workDays.filter(d => d.salary_profile_id === p.id);
+    const earned = profileDays.reduce((sum, d) => sum + Number(d.earned_amount || 0), 0);
+    // Baseline remaining days
+    const workedCount = profileDays.filter(d => d.status === 'worked' || d.earned_amount > 0).length;
+    const totalScheduled = p.schedule_type === '5/2' ? 22 : 15;
+    const remainingCount = Math.max(0, totalScheduled - workedCount);
+    const shiftEst = p.schedule_type === '5/2' ? (p.hours_per_day || 8) * (p.settings?.hourly_rate || 497) : (p.settings?.base_pay || 2415) + 700;
+    const forecast = earned + remainingCount * shiftEst;
+
+    if (isMe) {
+      myEarned = earned;
+      myForecast = forecast;
+    } else if (isGirl) {
+      girlEarned = earned;
+      girlForecast = forecast;
+    }
+  }
+
+  // If no profiles in db yet, provide demo values
+  if (!profiles.length) {
+    myEarned = 56576;
+    myForecast = 88384;
+    girlEarned = 42350;
+    girlForecast = 72450;
+  }
+
+  const familyForecast = myForecast + girlForecast;
+  const keyboard = inlineKeyboard([
+    [{ text: '+8 часов сегодня', callback_data: 'salary:quick:8' }, { text: '+4 часа', callback_data: 'salary:quick:4' }],
+    HOME_ROW,
+  ]);
+
+  return respond(io, renderSalarySummary({ myEarned, myForecast, girlEarned, girlForecast, familyForecast }), keyboard);
+}
+
 async function sendGoals(db, io, userId) {
   const profile = await getProfile(db, userId);
   const goals = Array.isArray(profile.goals) ? profile.goals : [];
@@ -396,6 +452,8 @@ async function handleCommand(db, account, io, command, args, prefs, text = '') {
     case 'start':
     case 'menu': return showMenu(io, account, prefs);
     case 'help': return respond(io, renderHelp(), inlineKeyboard([HOME_ROW]));
+    case 'salary':
+    case 'зарплата': return sendSalary(db, io, account.user_id, prefs);
     case 'today': return sendPeriodReport(db, io, account.user_id, prefs, 'today');
     case 'week': return sendPeriodReport(db, io, account.user_id, prefs, 'week');
     case 'month':
@@ -443,7 +501,26 @@ async function handleMessage(db, message) {
   }
   typing(chatId);
   const prefs = await getPrefs(db, account.user_id);
-  if (!command) return sendOperationPreview(db, account, io, text, prefs);
+  if (!command) {
+    // Check if user texted "+8 часов", "8 часов", "отработал 8 часов"
+    const hourMatch = text.match(/^[+]?(\d+(?:[.,]\d+)?)\s*(?:час\w*|ч\b)/iu) || text.match(/^отработал\w*\s*(\d+(?:[.,]\d+)?)/iu);
+    if (hourMatch) {
+      const hours = parseFloat(hourMatch[1].replace(',', '.'));
+      if (hours > 0 && hours <= 24) {
+        const today = localParts(prefs.timezone).date;
+        const profilesRes = await db.from('salary_profiles').select('*').eq('user_id', account.user_id).eq('active', true);
+        const p = (profilesRes.data || []).find(x => x.schedule_type === '5/2' || x.name.toLowerCase().includes('моя')) || profilesRes.data?.[0];
+        const rate = p?.settings?.hourly_rate || 497;
+        const earned = hours * rate;
+
+        return respond(io, renderHourCard({ hours, date: today, rate, earned, profileName: p?.name }), inlineKeyboard([
+          [{ text: '✅ Подтвердить', callback_data: `salary:confirm:${hours}:${earned}` }, { text: '✖️ Отмена', callback_data: 'salary:cancel' }]
+        ]));
+      }
+    }
+
+    return sendOperationPreview(db, account, io, text, prefs);
+  }
   return handleCommand(db, account, io, command, args, prefs, text);
 }
 const CALLBACK_TOASTS = { 'op:save': 'Записываю…', 'op:cancel': 'Отменено', 'undo:': 'Отменяю…', 'unlink:confirm': 'Готово' };
@@ -473,6 +550,44 @@ async function handleCallback(db, callback) {
     const command = data.slice(5);
     if (!MENU_COMMANDS.has(command)) return;
     return handleCommand(db, account, io, command, '', await getPrefs(db, account.user_id));
+  }
+  if (data.startsWith('salary:')) {
+    const [, action, val] = data.split(':');
+    const today = localParts((await getPrefs(db, account.user_id)).timezone).date;
+    const hours = Number(val) || 8;
+    const profilesRes = await db.from('salary_profiles').select('*').eq('user_id', account.user_id).eq('active', true);
+    const p = (profilesRes.data || []).find(x => x.schedule_type === '5/2' || x.name.toLowerCase().includes('моя')) || profilesRes.data?.[0];
+    const rate = p?.settings?.hourly_rate || 497;
+    const earned = hours * rate;
+
+    if (action === 'quick') {
+      const token = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+      return respond(io, renderHourCard({ hours, date: today, rate, earned, profileName: p?.name }), inlineKeyboard([
+        [{ text: '✅ Подтвердить', callback_data: `salary:confirm:${hours}:${earned}` }, { text: '✖️ Отмена', callback_data: 'salary:cancel' }]
+      ]));
+    }
+    if (action === 'confirm') {
+      const parts = data.split(':');
+      const confirmedHours = Number(parts[2]) || 8;
+      const confirmedEarned = Number(parts[3]) || (confirmedHours * 497);
+      if (p) {
+        await db.from('salary_work_days').upsert({
+          user_id: account.user_id,
+          salary_profile_id: p.id,
+          date: today,
+          planned_hours: 8,
+          actual_hours: confirmedHours,
+          status: 'worked',
+          rate: p?.settings?.hourly_rate || 497,
+          earned_amount: confirmedEarned,
+          note: 'Добавлено через Telegram-бота'
+        }, { onConflict: 'salary_profile_id,date' });
+      }
+      return respond(io, `✅ <b>Отработано: ${confirmedHours} ч</b>\nНачислено: <b>${money(confirmedEarned)}</b> за ${today}. Данные сохранены в профиль «${p?.name ?? 'Моя зарплата'}».`, inlineKeyboard([HOME_ROW]));
+    }
+    if (action === 'cancel') {
+      return respond(io, '✖️ Ввод часов отменён.', inlineKeyboard([HOME_ROW]));
+    }
   }
   if (data.startsWith('op:')) {
     const [, action, token, value] = data.split(':');

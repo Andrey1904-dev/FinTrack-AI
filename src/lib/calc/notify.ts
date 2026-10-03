@@ -1,8 +1,10 @@
 import { daysBetween, todayISO } from '../dates';
 import { money, relativeDays } from '../format';
 import type { Car, CarReminder, Goal, Task } from '@/types';
+import type { SalaryProfile } from '@/types/salary';
 import { reminderState } from './car';
 import type { CalendarEvent } from './events';
+import { isScheduledWorkDay } from './salary';
 
 export interface Candidate {
   key: string;
@@ -29,10 +31,58 @@ export function buildCandidates(input: {
   cars: Car[];
   goals: Goal[];
   tasks: Task[];
+  salaryProfiles?: SalaryProfile[];
   today?: string;
 }): Candidate[] {
   const today = input.today ?? todayISO();
   const out: Candidate[] = [];
+
+  // Salary Probation & Workday reminders (TZ Section 38)
+  if (input.salaryProfiles) {
+    for (const p of input.salaryProfiles) {
+      if (!p.active) continue;
+
+      // Probation ending soon or ended
+      if (p.probation_end_date) {
+        const daysToProbation = daysBetween(today, p.probation_end_date);
+        const standardRate = p.settings.hourly_rate ?? 497;
+        const probationRate = p.settings.probation_rate ?? 442;
+        const dailyEarn = (p.hours_per_day || 8) * standardRate;
+
+        if (daysToProbation > 0 && daysToProbation <= 7) {
+          out.push({
+            key: `probation:soon:${p.id}:${today}`,
+            severity: 'info',
+            icon: '💼',
+            title: 'Заканчивается испытательный срок',
+            body: `Через ${daysToProbation} ${daysToProbation === 1 ? 'день' : daysToProbation < 5 ? 'дня' : 'дней'} ставка изменится с ${probationRate} ₽/час на ${standardRate} ₽/час.`,
+            link: '/salary',
+          });
+        } else if (daysToProbation === 0 || (daysToProbation < 0 && daysToProbation >= -3)) {
+          out.push({
+            key: `probation:ended:${p.id}`,
+            severity: 'success',
+            icon: '🎉',
+            title: 'Испытательный срок завершён',
+            body: `Текущая ставка: ${standardRate} ₽/час. За ${p.hours_per_day || 8} часов: ${money(dailyEarn)}.`,
+            link: '/salary',
+          });
+        }
+      }
+
+      // Today workday plan
+      if (isScheduledWorkDay(today, p)) {
+        out.push({
+          key: `workday:today:${p.id}:${today}`,
+          severity: 'info',
+          icon: '⏱️',
+          title: `Сегодня рабочий день · ${p.name}`,
+          body: `План: ${p.hours_per_day || 8} часов`,
+          link: '/salary',
+        });
+      }
+    }
+  }
 
   for (const e of input.events) {
     const d = daysBetween(today, e.date);

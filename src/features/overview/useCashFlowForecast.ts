@@ -11,11 +11,15 @@ export function useCashFlowForecast(horizonDays: number) {
   const debts = useRows('debts');
   const goals = useRows('financial_goals');
   const cars = useRows('cars');
+  const salaryProfiles = useRows('salary_profiles');
+  const salaryWorkDays = useRows('salary_work_days');
+  const salaryRates = useRows('salary_rates');
+  const salaryPayments = useRows('salary_payments');
   const carHistory = { from: addDaysISO(today, -364), to: today };
   const refuels = useRows('car_refuels', carHistory);
   const carExpenses = useRows('car_expenses', carHistory);
   const carService = useRows('car_service', carHistory);
-  const queries = [recurring, debts, goals, cars, refuels, carExpenses, carService];
+  const queries = [recurring, debts, goals, cars, refuels, carExpenses, carService, salaryProfiles, salaryWorkDays, salaryRates, salaryPayments];
   const settings = profile?.settings ?? {};
   const configured = typeof settings.current_balance === 'number' && Number.isFinite(settings.current_balance);
 
@@ -29,6 +33,10 @@ export function useCashFlowForecast(horizonDays: number) {
     refuels: refuels.rows,
     carExpenses: carExpenses.rows,
     carService: carService.rows,
+    salaryProfiles: salaryProfiles.rows,
+    salaryWorkDays: salaryWorkDays.rows,
+    salaryRates: salaryRates.rows,
+    salaryPayments: salaryPayments.rows,
     horizonDays,
     today,
   }), [
@@ -42,6 +50,10 @@ export function useCashFlowForecast(horizonDays: number) {
     refuels.rows,
     carExpenses.rows,
     carService.rows,
+    salaryProfiles.rows,
+    salaryWorkDays.rows,
+    salaryRates.rows,
+    salaryPayments.rows,
     horizonDays,
     today,
   ]);
