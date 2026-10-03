@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Field, Input, MoneyInput, Select, Chips } from '@/components/ui/form';
+import { CheckRow, Chips, Field, Input, MoneyInput, Select } from '@/components/ui/form';
 import { useSaveRow } from '@/data/hooks';
 import { useAuth } from '@/data/auth';
 import { useCurrentCar } from '@/features/cars/useCars';
@@ -73,26 +73,26 @@ export function RefuelForm({ initial, carId, onDone }: { initial?: CarRefuel; ca
     });
   };
 
-  if (!cars.length) return <p className="py-6 text-center text-sm text-muted">Сначала добавьте автомобиль в разделе «Авто».</p>;
+  if (!cars.length) return <p className="py-6 text-center text-[12.5px] text-mute">Сначала добавьте автомобиль в разделе «Авто».</p>;
 
   return (
     <FormShell onSubmit={submit} saving={saving} error={error || fieldError}>
       {cars.length > 1 && (
         <Field label="Автомобиль">{id => <Select id={id} value={car} onChange={e => setCar(e.target.value)}>{cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}</Field>
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Дата">{id => <Input id={id} type="date" value={date} onChange={e => setDate(e.target.value)} />}</Field>
         <Field label="Пробег, км">{id => <MoneyInput id={id} value={mileage} onChange={e => setMileage(e.target.value)} />}</Field>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Field label="Литры">{id => <MoneyInput id={id} value={liters} onChange={e => onLiters(e.target.value)} autoFocus />}</Field>
         <Field label="₽ за литр">{id => <MoneyInput id={id} value={price} onChange={e => onPrice(e.target.value)} />}</Field>
         <Field label="Сумма, ₽">{id => <MoneyInput id={id} value={total} onChange={e => onTotal(e.target.value)} />}</Field>
       </div>
       <Field label="Топливо">{() => <Chips value={fuel} onChange={setFuel} options={FUEL_TYPES} />}</Field>
       <Field label="АЗС">{id => <Input id={id} value={station} onChange={e => setStation(e.target.value)} placeholder="Например: Газпром" maxLength={80} />}</Field>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={full} onChange={e => setFull(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Полный бак (для точного расчёта расхода)</label>
-      {!initial && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={asExpense} onChange={e => setAsExpense(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Учесть в расходах (категория «Топливо»)</label>}
+      <CheckRow checked={full} onChange={setFull} label="Полный бак (для точного расчёта расхода)" />
+      {!initial && <CheckRow checked={asExpense} onChange={setAsExpense} label="Учесть в расходах (категория «Топливо»)" />}
     </FormShell>
   );
 }

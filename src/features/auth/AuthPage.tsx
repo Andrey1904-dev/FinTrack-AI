@@ -1,3 +1,4 @@
+import { Layers, LogIn } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Segmented } from '@/components/ui/form';
@@ -5,6 +6,29 @@ import { authErrorMessage } from '@/lib/errors';
 import { authRedirectUrl, supabase } from '@/lib/supabase';
 
 type Mode = 'signin' | 'signup' | 'magic';
+
+function Shell({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+  return (
+    <div
+      className="flex min-h-dvh flex-col items-center justify-center px-4 py-10"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 40px)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 40px)' }}
+    >
+      <div className="w-full max-w-[400px] animate-rise">
+        <div className="mb-7 flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-[2px] border border-amber/50 bg-amber/10 text-amber" aria-hidden>
+            <Layers size={20} />
+          </div>
+          <div>
+            <h1 className="text-[17px] font-semibold tracking-[0.02em] text-txt">PERSONAL OS</h1>
+            <p className="silk mt-1">личная панель управления</p>
+          </div>
+        </div>
+        {children}
+        {footer}
+      </div>
+    </div>
+  );
+}
 
 export function AuthPage() {
   const [mode, setMode] = useState<Mode>('signin');
@@ -26,7 +50,11 @@ export function AuthPage() {
         const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (err) throw err;
       } else if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: authRedirectUrl() } });
+        const { data, error: err } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: authRedirectUrl() },
+        });
         if (err) throw err;
         if (!data.session) setInfo('Мы отправили письмо со ссылкой подтверждения. Откройте её, затем войдите.');
       } else {
@@ -53,31 +81,78 @@ export function AuthPage() {
   };
 
   return (
-    <div className="grid min-h-dvh place-items-center px-4 py-10">
-      <div className="w-full max-w-sm animate-fade-in">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-accent text-lg font-bold text-[hsl(225_30%_8%)]">OS</div>
-          <h1 className="text-2xl font-semibold tracking-tight">Personal OS</h1>
-          <p className="mt-1 text-sm text-muted">Деньги, долги, авто, цели и задачи — в одном месте.</p>
+    <Shell
+      footer={
+        <p className="mt-6 text-center text-[11px] leading-relaxed text-mute">
+          Каждый пользователь видит только свои данные. Доступ ограничен политиками Row Level Security.
+        </p>
+      }
+    >
+      <form onSubmit={submit} className="panel panel-screw space-y-4 px-5 pb-5 pt-7" noValidate>
+        <div className="flex items-center gap-3">
+          <span className="silk whitespace-nowrap">вход в систему</span>
+          <span className="h-px flex-1 bg-engrave/70" />
         </div>
-        <form onSubmit={submit} className="card space-y-4 p-5" noValidate>
-          <Segmented value={mode} onChange={m => { setMode(m); setError(''); setInfo(''); }} className="w-full"
-            options={[{ value: 'signin', label: 'Вход' }, { value: 'signup', label: 'Регистрация' }, { value: 'magic', label: 'Ссылка' }]} />
-          <Field label="E-mail">{id => <Input id={id} type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus />}</Field>
-          {mode !== 'magic' && (
-            <Field label="Пароль">{id => <Input id={id} type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={e => setPassword(e.target.value)} />}</Field>
-          )}
-          {mode === 'magic' && <p className="text-xs text-muted">Пароль не нужен: пришлём одноразовую ссылку для входа.</p>}
-          {error && <p role="alert" className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad">{error}</p>}
-          {info && <p role="status" className="rounded-lg border border-good/30 bg-good/10 px-3 py-2 text-sm text-good">{info}</p>}
-          <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
-            {busy ? 'Подождите…' : mode === 'signin' ? 'Войти' : mode === 'signup' ? 'Создать аккаунт' : 'Отправить ссылку'}
-          </Button>
-          {mode === 'signin' && <button type="button" onClick={reset} className="block w-full text-center text-xs text-muted hover:text-fg">Забыли пароль?</button>}
-        </form>
-        <p className="mt-6 text-center text-xs text-muted">Каждый пользователь видит только свои данные.</p>
-      </div>
-    </div>
+
+        <Segmented
+          ariaLabel="Способ входа"
+          value={mode}
+          onChange={m => {
+            setMode(m);
+            setError('');
+            setInfo('');
+          }}
+          className="w-full"
+          options={[
+            { value: 'signin', label: 'Вход' },
+            { value: 'signup', label: 'Регистрация' },
+            { value: 'magic', label: 'Ссылка' },
+          ]}
+        />
+
+        <Field label="E-mail">
+          {id => <Input id={id} type="email" autoComplete="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus />}
+        </Field>
+
+        {mode !== 'magic' && (
+          <Field label="Пароль">
+            {id => (
+              <Input
+                id={id}
+                type="password"
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            )}
+          </Field>
+        )}
+
+        {mode === 'magic' && <p className="text-[11.5px] leading-relaxed text-mute">Пароль не нужен: пришлём одноразовую ссылку для входа.</p>}
+
+        {error && (
+          <p role="alert" className="border border-red/40 bg-red/[0.08] px-3 py-2 text-[12px] leading-snug text-red">
+            {error}
+          </p>
+        )}
+        {info && (
+          <p role="status" className="border border-cyan/40 bg-cyan/[0.08] px-3 py-2 text-[12px] leading-snug text-cyan">
+            {info}
+          </p>
+        )}
+
+        <Button type="submit" variant="primary" size="lg" block disabled={busy}>
+          <LogIn size={15} />
+          {busy ? 'Подождите…' : mode === 'signin' ? 'Войти' : mode === 'signup' ? 'Создать аккаунт' : 'Отправить ссылку'}
+        </Button>
+
+        {mode === 'signin' && (
+          <button type="button" onClick={reset} className="block min-h-[44px] w-full text-center text-[11.5px] text-mute transition-colors hover:text-txt">
+            Забыли пароль?
+          </button>
+        )}
+      </form>
+    </Shell>
   );
 }
 
@@ -85,6 +160,7 @@ export function RecoveryPage({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (password.length < 6) return setError('Пароль — минимум 6 символов.');
@@ -94,14 +170,22 @@ export function RecoveryPage({ onDone }: { onDone: () => void }) {
     if (err) setError(authErrorMessage(err));
     else onDone();
   };
+
   return (
-    <div className="grid min-h-dvh place-items-center px-4">
-      <form onSubmit={submit} className="card w-full max-w-sm space-y-4 p-5">
-        <h1 className="text-lg font-semibold">Новый пароль</h1>
-        <Field label="Пароль">{id => <Input id={id} type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} autoFocus />}</Field>
-        {error && <p role="alert" className="text-sm text-bad">{error}</p>}
-        <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>Сохранить пароль</Button>
+    <Shell>
+      <form onSubmit={submit} className="panel panel-screw space-y-4 px-5 pb-5 pt-7" noValidate>
+        <div className="flex items-center gap-3">
+          <span className="silk whitespace-nowrap">новый пароль</span>
+          <span className="h-px flex-1 bg-engrave/70" />
+        </div>
+        <Field label="Пароль">
+          {id => <Input id={id} type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} autoFocus />}
+        </Field>
+        {error && <p role="alert" className="text-[12px] text-red">{error}</p>}
+        <Button type="submit" variant="primary" size="lg" block disabled={busy}>
+          {busy ? 'Сохраняем…' : 'Сохранить пароль'}
+        </Button>
       </form>
-    </div>
+    </Shell>
   );
 }

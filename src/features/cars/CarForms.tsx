@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Chips, Field, Input, MoneyInput, Segmented, Select, Textarea } from '@/components/ui/form';
+import { CheckRow, Chips, Field, Input, MoneyInput, Segmented, Select, Textarea } from '@/components/ui/form';
 import { useAuth } from '@/data/auth';
 import { useInvalidate, useSaveRow } from '@/data/hooks';
 import { FormShell, useSubmit } from '@/features/forms/shared';
@@ -33,7 +33,7 @@ export function CarForm({ initial, first, onDone }: { initial?: Car; first?: boo
       }));
     }}>
       <Field label="Автомобиль">{id => <Input id={id} value={name} onChange={e => setName(e.target.value)} placeholder="Например: VAZ-2114" autoFocus maxLength={80} />}</Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Год">{id => <MoneyInput id={id} value={year} onChange={e => setYear(e.target.value)} placeholder="2006" />}</Field>
         <Field label="Двигатель">{id => <Input id={id} value={engine} onChange={e => setEngine(e.target.value)} placeholder="1.5" maxLength={40} />}</Field>
       </div>
@@ -83,16 +83,16 @@ export function CarExpenseForm({ initial, carId, onDone }: { initial?: CarExpens
     }}>
       {cars.length > 1 && <Field label="Автомобиль">{id => <Select id={id} value={car} onChange={e => setCar(e.target.value)}>{cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}</Field>}
       <Field label="Тип расхода">{() => <Chips value={category} onChange={setCategory} options={CAR_EXPENSE_CATEGORIES} />}</Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Сумма, ₽">{id => <MoneyInput id={id} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />}</Field>
         <Field label="Дата">{id => <Input id={id} type="date" value={date} onChange={e => setDate(e.target.value)} />}</Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Описание">{id => <Input id={id} value={title} onChange={e => setTitle(e.target.value)} maxLength={120} />}</Field>
         <Field label="Пробег, км">{id => <MoneyInput id={id} value={mileage} onChange={e => setMileage(e.target.value)} />}</Field>
       </div>
       <Field label="Комментарий">{id => <Input id={id} value={comment} onChange={e => setComment(e.target.value)} maxLength={300} />}</Field>
-      {!initial && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={asExpense} onChange={e => setAsExpense(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Учесть в расходах</label>}
+      {!initial && <CheckRow checked={asExpense} onChange={setAsExpense} label="Учесть в расходах" />}
     </FormShell>
   );
 }
@@ -129,7 +129,7 @@ export function ReminderForm({ initial, carId, onDone }: { initial?: CarReminder
       <Segmented value={kind} onChange={setKind} className="w-full" options={[{ value: 'mileage', label: 'По пробегу' }, { value: 'date', label: 'По дате' }]} />
       {kind === 'mileage' ? (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Через, км" hint={`Срок: ${due.toLocaleString('ru-RU')} км`}>{id => <MoneyInput id={id} value={km} onChange={e => setKm(e.target.value)} placeholder="7000" />}</Field>
             <Field label="Повторять каждые, км" hint="Пусто — как «через»">{id => <MoneyInput id={id} value={repeat} onChange={e => setRepeat(e.target.value)} />}</Field>
           </div>

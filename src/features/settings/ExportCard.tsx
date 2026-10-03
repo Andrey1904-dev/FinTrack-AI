@@ -1,15 +1,21 @@
-import { Download } from 'lucide-react';
+import { Download, FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader } from '@/components/ui/misc';
+import { Panel } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
+import { todayISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { downloadCSV, downloadJSON, type Column } from '@/lib/export';
-import { todayISO } from '@/lib/dates';
 import { exportEverything, fetchTable } from './exportAll';
 
 type Row = Record<string, unknown>;
-const col = (header: string, key: string): Column<Row> => ({ header, value: r => { const v = r[key]; return v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); } });
+const col = (header: string, key: string): Column<Row> => ({
+  header,
+  value: r => {
+    const v = r[key];
+    return v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  },
+});
 
 const SETS: Array<{ label: string; table: string; file: string; columns: Array<Column<Row>> }> = [
   { label: 'Доходы и расходы', table: 'finance_operations', file: 'operations', columns: [col('Дата', 'date'), col('Тип', 'type'), col('Сумма', 'amount'), col('Категория', 'category'), col('Комментарий', 'note')] },
@@ -26,27 +32,56 @@ export function ExportCard() {
   const toast = useToast();
   const [busy, setBusy] = useState('');
   const stamp = todayISO();
+
   const csv = async (s: (typeof SETS)[number]) => {
     setBusy(s.table);
-    try { const rows = await fetchTable(s.table); downloadCSV(`${s.file}-${stamp}`, rows, s.columns); toast.success(`Выгружено строк: ${rows.length}`); } catch (e) { toast.error(friendlyError(e, 'Не удалось выгрузить данные')); } finally { setBusy(''); }
+    try {
+      const rows = await fetchTable(s.table);
+      downloadCSV(`${s.file}-${stamp}`, rows, s.columns);
+      toast.success(`Выгружено строк: ${rows.length}`);
+    } catch (e) {
+      toast.error(friendlyError(e, 'Не удалось выгрузить данные'));
+    } finally {
+      setBusy('');
+    }
   };
+
   const all = async () => {
     setBusy('all');
-    try { downloadJSON(`personal-os-${stamp}`, await exportEverything()); toast.success('Все данные выгружены'); } catch (e) { toast.error(friendlyError(e, 'Не удалось выгрузить данные')); } finally { setBusy(''); }
+    try {
+      downloadJSON(`personal-os-${stamp}`, await exportEverything());
+      toast.success('Все данные выгружены');
+    } catch (e) {
+      toast.error(friendlyError(e, 'Не удалось выгрузить данные'));
+    } finally {
+      setBusy('');
+    }
   };
+
   return (
-    <Card>
-      <CardHeader title="Экспорт данных" />
-      <div className="space-y-4 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3">
-          <div><p className="text-sm font-medium">Export all data</p><p className="text-xs text-muted">Полная копия всех ваших данных одним JSON-файлом.</p></div>
-          <Button variant="primary" onClick={() => void all()} disabled={!!busy}><Download size={16} /> {busy === 'all' ? 'Готовим…' : 'Скачать JSON'}</Button>
+    <Panel label="Экспорт данных">
+      <div className="flex flex-col gap-3 border border-line bg-rail/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-txt">Полная копия данных</p>
+          <p className="mt-0.5 text-[11.5px] text-mute">Все таблицы одним JSON-файлом — для резерва или переезда.</p>
         </div>
-        <div>
-          <p className="mb-2 text-xs text-muted">Таблицы в CSV (открываются в Excel):</p>
-          <div className="flex flex-wrap gap-2">{SETS.map(s => <Button key={s.table} size="sm" onClick={() => void csv(s)} disabled={!!busy}>{busy === s.table ? '…' : s.label}</Button>)}</div>
+        <Button variant="primary" className="shrink-0" onClick={() => void all()} disabled={!!busy}>
+          <Download size={16} /> {busy === 'all' ? 'Готовим…' : 'Скачать JSON'}
+        </Button>
+      </div>
+
+      <div className="mt-4">
+        <p className="flex items-center gap-2 text-[11.5px] text-mute">
+          <FileSpreadsheet size={14} /> Отдельные таблицы в CSV — открываются в Excel и Numbers:
+        </p>
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          {SETS.map(s => (
+            <Button key={s.table} size="sm" variant="outline" onClick={() => void csv(s)} disabled={!!busy}>
+              {busy === s.table ? '…' : s.label}
+            </Button>
+          ))}
         </div>
       </div>
-    </Card>
+    </Panel>
   );
 }

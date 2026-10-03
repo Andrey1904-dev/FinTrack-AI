@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/dialog';
-import { Badge, Card, CardHeader, Skeleton } from '@/components/ui/misc';
+import { CheckRow } from '@/components/ui/form';
+import { Badge, Panel, Skeleton } from '@/components/ui/misc';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/data/auth';
 import { friendlyError } from '@/lib/errors';
@@ -96,44 +97,61 @@ export function TelegramCard() {
   const linked = !!account.data;
 
   return (
-    <Card>
-      <CardHeader title="Telegram-бот" action={account.isLoading ? undefined : <Badge tone={linked ? 'good' : 'neutral'}>{linked ? 'подключён' : 'не подключён'}</Badge>} />
-      <div className="space-y-4 p-4">
+    <Panel
+      label="Telegram-бот"
+      right={account.isLoading ? undefined : <Badge tone={linked ? 'good' : 'neutral'}>{linked ? 'подключён' : 'не подключён'}</Badge>}
+    >
+      <div className="space-y-4">
         {account.isLoading ? <Skeleton className="h-16" /> : linked ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm">Аккаунт: <span className="font-medium">{account.data?.username ? `@${account.data.username}` : account.data?.first_name || 'Telegram'}</span></p>
+              <p className="text-[12.5px] text-dim">
+                Аккаунт: <span className="font-medium text-txt">{account.data?.username ? `@${account.data.username}` : account.data?.first_name || 'Telegram'}</span>
+              </p>
               <Button size="sm" variant="danger" onClick={() => void unlink()}><Unlink size={14} /> Отвязать</Button>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-1 sm:grid-cols-2">
               {PREF_LABELS.map(([k, label]) => (
-                <label key={k} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--accent))]" checked={prefs.data ? prefs.data[k] : true} onChange={e => void setPref(k, e.target.checked)} /> {label}
-                </label>
+                <CheckRow key={k} checked={prefs.data ? prefs.data[k] : true} onChange={v => void setPref(k, v)} label={label} />
               ))}
             </div>
-            <p className="text-xs text-muted">Пришлите боту «+1200 бензин» — расход появится здесь после подтверждения.</p>
+            <p className="text-[11.5px] text-mute">Пришлите боту «+1200 бензин» — расход появится здесь после подтверждения.</p>
           </>
         ) : (
           <>
-            <p className="text-sm text-muted">Бот присылает напоминания о платежах и принимает расходы текстом. Ваши прежние данные и привязки сохраняются.</p>
+            <p className="text-[12.5px] leading-relaxed text-dim">
+              Бот присылает напоминания о платежах и принимает расходы текстом. Ваши прежние данные и привязки сохраняются.
+            </p>
             {code && left > 0 ? (
-              <div className="rounded-lg border border-accent/40 bg-accent/5 p-4">
-                <p className="text-xs text-muted">Отправьте боту команду:</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <code className="rounded-md bg-bg px-3 py-1.5 text-base font-semibold tracking-wider">/link {code.value}</code>
-                  <Button size="sm" onClick={() => { void navigator.clipboard?.writeText(`/link ${code.value}`).then(() => toast.success('Скопировано')); }}><Copy size={14} /> Копировать</Button>
-                  {botName && <a href={`https://t.me/${botName}`} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg border border-line px-3 text-sm hover:bg-raised"><ExternalLink size={14} /> @{botName}</a>}
+              <div className="border border-amber/40 bg-amber/[0.05] p-4">
+                <p className="silk">Отправьте боту команду</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <code className="border border-line bg-ink px-3 py-1.5 font-mono text-[15px] font-semibold tracking-[0.14em] text-amber">/link {code.value}</code>
+                  <Button size="sm" variant="outline" onClick={() => { void navigator.clipboard?.writeText(`/link ${code.value}`).then(() => toast.success('Скопировано')); }}>
+                    <Copy size={14} /> Копировать
+                  </Button>
+                  {botName && (
+                    <a
+                      href={`https://t.me/${botName}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center gap-1 border border-line px-3 text-[12.5px] text-dim transition-colors hover:text-txt"
+                    >
+                      <ExternalLink size={14} /> @{botName}
+                    </a>
+                  )}
                 </div>
-                <p className="mt-2 text-xs text-muted">Код действует {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}. Страница обновится сама после привязки.</p>
+                <p className="tnum mt-2 text-[11.5px] text-mute">
+                  Код действует {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}. Страница обновится сама после привязки.
+                </p>
               </div>
             ) : (
               <Button variant="primary" onClick={() => void generate()} disabled={busy}><Send size={16} /> {code ? 'Код истёк — создать новый' : 'Получить код привязки'}</Button>
             )}
           </>
         )}
-        {(account.error || prefs.error) && <p className="text-xs text-bad">Не удалось загрузить статус Telegram. Проверьте соединение.</p>}
+        {(account.error || prefs.error) && <p className="text-[11.5px] text-red">Не удалось загрузить статус Telegram. Проверьте соединение.</p>}
       </div>
-    </Card>
+    </Panel>
   );
 }

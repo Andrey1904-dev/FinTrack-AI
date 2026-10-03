@@ -2,49 +2,375 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ *
+ * Design tokens — ported from the FinanceDesign visual language.
+ * Keep in sync with tailwind.config.ts (single palette, two consumers).
+ * ------------------------------------------------------------------ */
 :root {
-  --bg: 225 22% 6%;
-  --surface: 225 18% 9%;
-  --raised: 225 16% 13%;
-  --line: 225 13% 19%;
-  --fg: 220 22% 93%;
-  --muted: 222 9% 62%;
-  --accent: 226 95% 74%;
-  --good: 152 52% 52%;
-  --bad: 2 72% 67%;
-  --warn: 38 82% 60%;
+  /* surfaces */
+  --ink: #0e1113;
+  --ink-2: #111618;
+  --panel: #161b1e;
+  --rail: #1c2327;
+  --line: #242c31;
+  --engrave: #38444a;
+
+  /* text */
+  --txt: #e8edea;
+  --dim: #9aa6a3;
+  --mute: #7a8784;
+
+  /* signal */
+  --amber: #f0a828;
+  --amber-lt: #ffc96b;
+  --amber-dk: #8a5d12;
+  --cyan: #31d3c4;
+  --red: #e2564d;
+  --blue: #5b8def;
+
+  /* semantic aliases kept for older components */
+  --bg: var(--ink);
+  --surface: var(--panel);
+  --raised: var(--rail);
+  --fg: var(--txt);
+  --muted: var(--mute);
+  --accent: var(--amber);
+  --good: var(--cyan);
+  --bad: var(--red);
+  --warn: var(--amber-lt);
+
   color-scheme: dark;
 }
 
 @layer base {
-  * { @apply border-line; -webkit-tap-highlight-color: transparent; }
-  html, body, #root { height: 100%; }
+  * {
+    @apply border-line;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    /* keeps the sticky header above the notch on iPhone */
+    background-color: var(--ink);
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
-    @apply bg-bg font-sans text-fg antialiased;
-    font-feature-settings: 'cv11', 'ss01', 'tnum';
+    margin: 0;
+    background-color: var(--ink);
+    color: var(--txt);
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
     overscroll-behavior-y: none;
   }
-  ::selection { background: hsl(var(--accent) / .3); }
-  input, select, textarea, button { font: inherit; }
-  :focus-visible { outline: 2px solid hsl(var(--accent) / .7); outline-offset: 2px; }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: hsl(var(--line)); border-radius: 8px; border: 2px solid hsl(var(--bg)); }
-  input[type='range'] { accent-color: hsl(var(--accent)); }
-  input[type='date']::-webkit-calendar-picker-indicator { filter: invert(.7); }
+
+  /* engraved faceplate grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(180deg, rgb(255 255 255 / 0.014) 0px, rgb(255 255 255 / 0.014) 1px, transparent 1px, transparent 3px),
+      linear-gradient(180deg, rgb(255 255 255 / 0.022) 0%, rgb(0 0 0 / 0) 42%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #root {
+    position: relative;
+    z-index: 1;
+  }
+
+  ::selection {
+    background: var(--amber);
+    color: var(--ink);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--engrave) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--engrave);
+    border-radius: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* all icons follow the design's thin mechanical stroke */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  input[type='range'] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 24px;
+    width: 100%;
+  }
+  input[type='range']::-webkit-slider-runnable-track {
+    height: 3px;
+    background: var(--engrave);
+    border-radius: 2px;
+  }
+  input[type='range']::-moz-range-track {
+    height: 3px;
+    background: var(--engrave);
+    border-radius: 2px;
+  }
+  input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 24px;
+    margin-top: -10.5px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--amber-lt), #b57b18);
+    border: 1px solid var(--amber-dk);
+    cursor: grab;
+  }
+  input[type='range']::-moz-range-thumb {
+    width: 16px;
+    height: 24px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--amber-lt), #b57b18);
+    border: 1px solid var(--amber-dk);
+    cursor: grab;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.65) sepia(0.4) saturate(3) hue-rotate(340deg);
+    cursor: pointer;
+    opacity: 0.8;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--amber);
+  }
 }
 
 @layer components {
-  .card { @apply rounded-xl border border-line bg-surface; }
-  .tabular { font-variant-numeric: tabular-nums; }
-  .skeleton { @apply relative overflow-hidden rounded-md bg-raised; }
+  /* --- silk-screen: the caption printed above a value --- */
+  .silk {
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--mute);
+    line-height: 1.25;
+  }
+
+  .silk-b {
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    line-height: 1.25;
+  }
+
+  /* --- tabular figures for money --- */
+  .tnum,
+  .tabular {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* --- display numerals (readouts) --- */
+  .disp {
+    font-family: Oswald, 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 0.92;
+  }
+
+  /* --- instrument panel --- */
+  .panel,
+  .card {
+    background: linear-gradient(180deg, rgb(28 35 39 / 0.62) 0%, rgb(22 27 30 / 0.62) 100%);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    position: relative;
+  }
+
+  .panel-flat {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+
+  .panel-screw::before,
+  .panel-screw::after {
+    content: '';
+    position: absolute;
+    top: 7px;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--engrave);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  .panel-screw::before {
+    left: 7px;
+  }
+  .panel-screw::after {
+    right: 7px;
+  }
+
+  .hair {
+    height: 1px;
+    background: linear-gradient(90deg, var(--engrave) 0%, var(--engrave) 62%, rgb(56 68 74 / 0) 100%);
+  }
+
+  .no-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-bar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* --- loading --- */
+  .skeleton {
+    @apply relative overflow-hidden bg-rail;
+    border: 1px solid var(--line);
+  }
   .skeleton::after {
-    content: ''; position: absolute; inset: 0; transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, hsl(var(--fg) / .06), transparent);
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(232 237 234 / 0.06), transparent);
     animation: shimmer 1.4s infinite;
   }
-  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* --- motion: precise mechanics --- */
+  .rise {
+    animation: rise 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+  .slideup {
+    animation: slideup 0.22s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+  .fadein {
+    animation: fadein 0.18s linear both;
+  }
+  .blink {
+    animation: blink 2.4s ease-in-out infinite;
+  }
+
+  /* --- safe areas (iPhone notch / home indicator) --- */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+@layer utilities {
+  /* text that must never break the layout on a 320px screen */
+  .money-clamp {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slideup {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
