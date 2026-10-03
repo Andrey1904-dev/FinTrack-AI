@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.1.0 — единая дизайн-система FinanceDesign
+
+Редизайн всего интерфейса (все разделы, не только главная). Логика, данные Supabase, маршруты и
+Telegram-бот не менялись.
+
+### Добавлено
+- Токены дизайна в `tailwind.config.ts` и `src/index.css`: цвета (`ink`, `panel`, `rail`, `line`, `engrave`, `txt`, `dim`, `mute`, `amber`, `cyan`, `red`),
+  типографика (IBM Plex Sans/Mono + Oswald), радиусы ≤ 6 px, тени, анимации, утилиты `.silk`, `.tnum`, `.panel`, `.disp`, `.money-clamp`.
+- Примитивы: `Panel`, `Stat`, `Readout`, `Share`, `Progress`, `Meter`, `Badge`, `Tabs`, `Section`, `DataTable`, `EmptyState`/`ErrorState`/`PageSkeleton`,
+  `Button`/`IconButton`, `Field`/`Input`/`Select`/`MoneyInput`/`Segmented`/`Chips`/`CheckRow`/`Switch`, `Modal`/`Sheet`, `Dropdown`, `Tooltip`, тосты, `ChartContainer`.
+- Каркас: боковая навигация с номерами разделов 01…14, мобильная нижняя панель и FAB, шапки для десктопа и телефона, поиск ⌘K.
+
+### Изменено
+- Переписаны все экраны: главная, «Сегодня», финансы (операции, повторяющиеся, календарь, прогноз, лимиты), долги (список, история, калькулятор),
+  авто, автокалькулятор, What-if, цели, задачи, обучение, заметки, команды, уведомления, настройки, авторизация и все формы.
+- Модальные окна на телефоне открываются нижней шторкой; таблицы прокручиваются внутри своего контейнера; интерактивные элементы ≥ 44 px;
+  учитываются `env(safe-area-inset-*)` и `100dvh`.
+- Номера разделов берутся из `nav.ts` (`codeFor`), дубли компонентов (`Card`/`CardHeader`) удалены.
+
 ## 3.0.0 — Personal OS
 
 Полная переработка интерфейса. Данные Supabase и Telegram-бот сохранены.

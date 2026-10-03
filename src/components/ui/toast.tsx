@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -19,16 +19,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setItems(prev => prev.filter(t => t.id !== id)), tone === 'error' ? 6000 : 2800);
   }, []);
   const value = useMemo(() => ({ success: (t: string) => push(t, 'ok'), error: (t: string) => push(t, 'error') }), [push]);
+
   return (
     <Ctx.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex flex-col items-center gap-2 px-4 lg:bottom-6" aria-live="polite">
-        {items.map(t => (
-          <div key={t.id} className={cn('pointer-events-auto flex max-w-md animate-fade-in items-start gap-2 rounded-xl border bg-raised px-4 py-3 text-sm shadow-xl', t.tone === 'ok' ? 'border-good/30' : 'border-bad/40')}>
-            {t.tone === 'ok' ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-good" /> : <AlertCircle size={18} className="mt-0.5 shrink-0 text-bad" />}
-            <span>{t.text}</span>
-          </div>
-        ))}
+      {/* above the phone tab bar, bottom-right on desktop */}
+      <div
+        className="pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-4 lg:items-end"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 84px)' }}
+        aria-live="polite"
+        role="status"
+      >
+        <div className="flex w-full max-w-md flex-col items-stretch gap-2 lg:items-end">
+          {items.map(t => (
+            <div
+              key={t.id}
+              className={cn(
+                'pointer-events-auto flex animate-rise items-start gap-2.5 border bg-panel/95 px-3.5 py-3 text-[12.5px] shadow-dialog backdrop-blur-md',
+                t.tone === 'ok' ? 'border-cyan/40' : 'border-red/50',
+              )}
+            >
+              {t.tone === 'ok' ? (
+                <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-cyan" />
+              ) : (
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red" />
+              )}
+              <span className={cn('leading-snug', t.tone === 'ok' ? 'text-txt' : 'text-red')}>{t.text}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </Ctx.Provider>
   );

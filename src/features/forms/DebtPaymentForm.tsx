@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Field, Input, MoneyInput, Select } from '@/components/ui/form';
+import { CheckRow, Field, Input, MoneyInput, Select } from '@/components/ui/form';
 import { useInvalidate, useRows } from '@/data/hooks';
 import { supabase } from '@/lib/supabase';
 import { todayISO } from '@/lib/dates';
@@ -47,7 +47,7 @@ export function DebtPaymentForm({ debtId, onDone }: { debtId?: string; onDone: (
     });
   };
 
-  if (!active.length) return <p className="py-6 text-center text-sm text-muted">Сначала добавьте долг в разделе «Долги».</p>;
+  if (!active.length) return <p className="py-6 text-center text-[12.5px] text-mute">Сначала добавьте долг в разделе «Долги».</p>;
 
   return (
     <FormShell onSubmit={submit} saving={saving} error={error || fieldError}>
@@ -59,13 +59,13 @@ export function DebtPaymentForm({ debtId, onDone }: { debtId?: string; onDone: (
         )}
       </Field>
       <Field label="Сумма платежа, ₽">{fid => <MoneyInput id={fid} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />}</Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Дата">{fid => <Input id={fid} type="date" value={date} onChange={e => setDate(e.target.value)} />}</Field>
         <Field label="В основной долг, ₽" hint="Пусто — вся сумма">{fid => <MoneyInput id={fid} value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="вся сумма" />}</Field>
       </div>
       <Field label="Комментарий">{fid => <Input id={fid} value={comment} onChange={e => setComment(e.target.value)} maxLength={200} />}</Field>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={asExpense} onChange={e => setAsExpense(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Учесть в расходах (категория «Кредиты»)</label>
-      {debt?.next_payment_date && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={advance} onChange={e => setAdvance(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Сдвинуть дату следующего платежа на месяц</label>}
+      <CheckRow checked={asExpense} onChange={setAsExpense} label="Учесть в расходах (категория «Кредиты»)" />
+      {debt?.next_payment_date && <CheckRow checked={advance} onChange={setAdvance} label="Сдвинуть дату следующего платежа на месяц" />}
     </FormShell>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Field, Input, Textarea } from '@/components/ui/form';
+import { CheckRow, Field, Input, Textarea } from '@/components/ui/form';
 import { useSaveRow } from '@/data/hooks';
 import type { Note } from '@/types';
 import { FormShell, useSubmit } from './shared';
@@ -22,12 +22,15 @@ export function NoteForm({ initial, onDone }: { initial?: Note; onDone: () => vo
     setFieldError('');
     void run(() => save.mutateAsync({ id: initial?.id, title: title.trim(), body, tags: parseTags(tags), pinned }));
   };
+
   return (
     <FormShell onSubmit={submit} saving={saving} error={error || fieldError}>
       <Field label="Заголовок">{id => <Input id={id} value={title} onChange={e => setTitle(e.target.value)} autoFocus maxLength={200} />}</Field>
-      <Field label="Текст">{id => <Textarea id={id} value={body} onChange={e => setBody(e.target.value)} className="min-h-[160px] font-mono text-[13px]" />}</Field>
-      <Field label="Теги" hint="Через запятую: docker, идеи, авто">{id => <Input id={id} value={tags} onChange={e => setTags(e.target.value)} />}</Field>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Закрепить вверху</label>
+      <Field label="Текст">{id => <Textarea id={id} value={body} onChange={e => setBody(e.target.value)} className="min-h-[180px] font-mono text-[12.5px]" />}</Field>
+      <Field label="Теги" hint="Через запятую: docker, идеи, авто">
+        {id => <Input id={id} value={tags} onChange={e => setTags(e.target.value)} />}
+      </Field>
+      <CheckRow checked={pinned} onChange={setPinned} label="Закрепить вверху" />
     </FormShell>
   );
 }

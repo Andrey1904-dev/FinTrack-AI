@@ -22,38 +22,80 @@ export function DebtForm({ initial, onDone }: { initial?: Debt; onDone: () => vo
   const { saving, error, run } = useSubmit('Не удалось сохранить долг', 'Долг сохранён', onDone);
 
   return (
-    <FormShell saving={saving} error={error || err} onSubmit={() => {
-      if (!name.trim()) return setErr('Введите название долга');
-      const bal = balance.trim() === '' ? num(original) : num(balance);
-      const orig = original.trim() === '' ? bal : num(original);
-      if (bal < 0 || orig < 0) return setErr('Суммы не могут быть отрицательными');
-      if (bal <= 0 && status === 'active' && !initial) return setErr('Укажите текущий остаток');
-      setErr('');
-      void run(() => save.mutateAsync({
-        id: initial?.id, kind, name: name.trim(), organization: org.trim(), original_amount: Math.max(orig, bal), balance: bal,
-        interest_rate: num(rate), min_payment: num(minPay), next_payment_date: next || null, credit_limit: kind === 'card' ? num(limit) : 0,
-        status: bal <= 0 ? 'closed' : status, comment: comment.trim(),
-      }));
-    }}>
-      <Segmented value={kind} onChange={setKind} className="w-full" options={[{ value: 'loan', label: 'Кредит' }, { value: 'card', label: 'Кредитка' }, { value: 'other', label: 'Другое' }]} />
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Название">{id => <Input id={id} value={name} onChange={e => setName(e.target.value)} placeholder="Автокредит" autoFocus maxLength={120} />}</Field>
-        <Field label="Организация">{id => <Input id={id} value={org} onChange={e => setOrg(e.target.value)} placeholder="Банк" maxLength={120} />}</Field>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+    <FormShell
+      saving={saving}
+      error={error || err}
+      onSubmit={() => {
+        if (!name.trim()) return setErr('Введите название долга');
+        const bal = balance.trim() === '' ? num(original) : num(balance);
+        const orig = original.trim() === '' ? bal : num(original);
+        if (bal < 0 || orig < 0) return setErr('Суммы не могут быть отрицательными');
+        if (bal <= 0 && status === 'active' && !initial) return setErr('Укажите текущий остаток');
+        setErr('');
+        void run(() =>
+          save.mutateAsync({
+            id: initial?.id,
+            kind,
+            name: name.trim(),
+            organization: org.trim(),
+            original_amount: Math.max(orig, bal),
+            balance: bal,
+            interest_rate: num(rate),
+            min_payment: num(minPay),
+            next_payment_date: next || null,
+            credit_limit: kind === 'card' ? num(limit) : 0,
+            status: bal <= 0 ? 'closed' : status,
+            comment: comment.trim(),
+          }),
+        );
+      }}
+    >
+      <Segmented
+        ariaLabel="Тип долга"
+        value={kind}
+        onChange={setKind}
+        className="w-full"
+        options={[
+          { value: 'loan', label: 'Кредит' },
+          { value: 'card', label: 'Кредитка' },
+          { value: 'other', label: 'Другое' },
+        ]}
+      />
+      <Field label="Название">
+        {id => <Input id={id} value={name} onChange={e => setName(e.target.value)} placeholder="Автокредит" autoFocus maxLength={120} />}
+      </Field>
+      <Field label="Организация">
+        {id => <Input id={id} value={org} onChange={e => setOrg(e.target.value)} placeholder="Банк" maxLength={120} />}
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Первоначальная сумма, ₽">{id => <MoneyInput id={id} value={original} onChange={e => setOriginal(e.target.value)} />}</Field>
         <Field label="Текущий остаток, ₽">{id => <MoneyInput id={id} value={balance} onChange={e => setBalance(e.target.value)} />}</Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Процент годовых">{id => <MoneyInput id={id} value={rate} onChange={e => setRate(e.target.value)} />}</Field>
         <Field label="Минимальный платёж, ₽">{id => <MoneyInput id={id} value={minPay} onChange={e => setMinPay(e.target.value)} />}</Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Дата ближайшего платежа">{id => <Input id={id} type="date" value={next} onChange={e => setNext(e.target.value)} />}</Field>
         {kind === 'card' && <Field label="Кредитный лимит, ₽">{id => <MoneyInput id={id} value={limit} onChange={e => setLimit(e.target.value)} />}</Field>}
       </div>
-      {initial && <Field label="Статус">{() => <Segmented value={status} onChange={setStatus} className="w-full" options={[{ value: 'active', label: 'Действует' }, { value: 'closed', label: 'Закрыт' }]} />}</Field>}
-      <Field label="Комментарий">{id => <Textarea id={id} value={comment} onChange={e => setComment(e.target.value)} className="min-h-[56px]" />}</Field>
+      {initial && (
+        <Field label="Статус">
+          {() => (
+            <Segmented
+              ariaLabel="Статус долга"
+              value={status}
+              onChange={setStatus}
+              className="w-full"
+              options={[
+                { value: 'active', label: 'Действует' },
+                { value: 'closed', label: 'Закрыт' },
+              ]}
+            />
+          )}
+        </Field>
+      )}
+      <Field label="Комментарий">{id => <Textarea id={id} value={comment} onChange={e => setComment(e.target.value)} className="min-h-[72px]" />}</Field>
     </FormShell>
   );
 }

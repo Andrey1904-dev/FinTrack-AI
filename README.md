@@ -29,6 +29,32 @@ AI-модуль пока заготовка: он ничего не меняет
 React 18 · TypeScript · Vite · Tailwind CSS · Radix UI · TanStack Query · Supabase (Auth, PostgreSQL, RLS, Realtime) · vite-plugin-pwa · Vitest.
 Без VPS, Docker и собственного backend: сайт статический, данные — в Supabase, бот — в Supabase Edge Functions.
 
+## Дизайн-система
+
+Интерфейс собран по визуальному языку FinanceDesign — «приборная панель»: анодированный тёмный металл, шелкография
+подписей, янтарные цифровые индикаторы. Все страницы используют один набор компонентов, второго варианта кнопки или
+карточки в проекте нет.
+
+| Слой | Где лежит |
+| --- | --- |
+| Токены (цвет, типографика, радиусы, тени, анимации) | `tailwind.config.ts` + CSS-переменные в `src/index.css` |
+| Утилиты: `.silk` (шелкография), `.tnum` (табличные цифры), `.panel`, `.disp`, `.money-clamp` | `src/index.css` |
+| Примитивы: `Panel`, `Stat`, `Readout`, `Share`, `Progress`, `Meter`, `Badge`, `Tabs`, `Section`, `DataTable`, состояния | `src/components/ui/misc.tsx` |
+| Кнопки и иконки-кнопки | `src/components/ui/button.tsx` |
+| Поля ввода, `Field`, `Segmented`, `Chips`, `CheckRow`, `Switch` | `src/components/ui/form.tsx` |
+| `Modal`/`Sheet` (нижняя шторка на телефоне), подтверждения | `src/components/ui/dialog.tsx` |
+| `Dropdown`, `Tooltip` | `src/components/ui/menu.tsx` |
+| Тосты | `src/components/ui/toast.tsx` |
+| Графики (`ChartContainer`, `LineChart`, `MonthBars`, `CategoryBars`) | `src/components/charts/charts.tsx` |
+| Каркас: боковая навигация, мобильная панель, шапка, поиск ⌘K | `src/features/layout/AppShell.tsx`, `src/features/search/SearchDialog.tsx` |
+
+Семантика цвета: `ink` — фон, `panel`/`rail` — поверхности, `line`/`engrave` — границы, `amber` — акцент и главные
+показатели, `cyan` — доход и успех, `red` — расход и опасность. Номера разделов (01…14) берутся из `src/features/layout/nav.ts`.
+
+Правила адаптации: телефон — одна колонка, нижняя панель навигации, формы в нижней шторке, таблицы прокручиваются
+внутри своего контейнера; планшет — две колонки; ноутбук — боковая навигация и до трёх колонок. Интерактивные элементы
+не меньше 44 px, учитываются `env(safe-area-inset-*)` и `100dvh`.
+
 ## Запуск локально
 
 ```bash

@@ -1,7 +1,8 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, ErrorState, Skeleton } from '@/components/ui/misc';
+import { IconButton } from '@/components/ui/button';
+import { ErrorState, Panel, Skeleton, Stat } from '@/components/ui/misc';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildEvents, type CalendarEvent } from '@/lib/calc';
 import { daysInMonth, monthEnd, monthKey, monthStart, shiftMonthKey, todayISO } from '@/lib/dates';
@@ -9,7 +10,13 @@ import { fmtMonth, money } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const DOT: Record<CalendarEvent['kind'], string> = { income: 'bg-good', recurring: 'bg-warn', debt: 'bg-bad', car: 'bg-accent', goal: 'bg-muted' };
+const DOT: Record<CalendarEvent['kind'], string> = {
+  income: 'bg-cyan',
+  recurring: 'bg-warn',
+  debt: 'bg-red',
+  car: 'bg-amber',
+  goal: 'bg-mute',
+};
 
 export function CalendarTab() {
   const o = useOverview();
@@ -33,55 +40,105 @@ export function CalendarTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label="Предыдущий месяц" onClick={() => setMonth(shiftMonthKey(month, -1))}>‹</Button>
-          <span className="min-w-36 text-center text-sm font-medium">{fmtMonth(month)}</span>
-          <Button variant="ghost" size="icon" aria-label="Следующий месяц" onClick={() => setMonth(shiftMonthKey(month, 1))}>›</Button>
+          <IconButton label="Предыдущий месяц" onClick={() => setMonth(shiftMonthKey(month, -1))}>
+            <ChevronLeft size={17} />
+          </IconButton>
+          <span className="min-w-[128px] text-center text-[12.5px] font-medium text-txt">{fmtMonth(month)}</span>
+          <IconButton label="Следующий месяц" onClick={() => setMonth(shiftMonthKey(month, 1))}>
+            <ChevronRight size={17} />
+          </IconButton>
         </div>
-        <p className="text-xs text-muted sm:text-sm"><span className="text-good">{money(incoming, { sign: true })}</span> · <span>{money(-outgoing)}</span></p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        <Card className="hidden overflow-hidden sm:block">
-          <div className="grid grid-cols-7 border-b border-line text-center text-xs text-muted">{WEEKDAYS.map(d => <div key={d} className="py-2">{d}</div>)}</div>
+      <div className="grid grid-cols-2 gap-3">
+        <Stat label="Поступления" value={money(incoming, { sign: true })} tone="good" />
+        <Stat label="Списания" value={money(-outgoing)} tone="bad" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        {/* Desktop / tablet: month grid. On a phone the list below takes over. */}
+        <Panel flat className="hidden min-w-0 overflow-hidden sm:block">
+          <div className="grid grid-cols-7 border-b border-line">
+            {WEEKDAYS.map(d => (
+              <div key={d} className="silk py-2 text-center">
+                {d}
+              </div>
+            ))}
+          </div>
           <div className="grid grid-cols-7">
             {cells.map((iso, i) => {
-              const list = iso ? byDay.get(iso) ?? [] : [];
+              const list = iso ? (byDay.get(iso) ?? []) : [];
               return (
-                <div key={i} className={cn('min-h-[84px] border-b border-r border-line p-1.5 [&:nth-child(7n)]:border-r-0', !iso && 'bg-bg/40', iso === today && 'bg-accent/[0.07]')}>
-                  {iso && <span className={cn('text-xs', iso === today ? 'font-semibold text-accent' : 'text-muted')}>{Number(iso.slice(8))}</span>}
+                <div
+                  key={i}
+                  className={cn(
+                    'min-h-[84px] border-b border-r border-line p-1.5 [&:nth-child(7n)]:border-r-0',
+                    !iso && 'bg-ink/50',
+                    iso === today && 'bg-amber/[0.07]',
+                  )}
+                >
+                  {iso && (
+                    <span className={cn('tnum text-[11px]', iso === today ? 'font-semibold text-amber' : 'text-mute')}>{Number(iso.slice(8))}</span>
+                  )}
                   <div className="mt-1 space-y-0.5">
-                    {list.slice(0, 2).map(e => <div key={e.id} className="flex items-center gap-1 truncate text-[11px] leading-tight" title={e.title}><i className={cn('h-1.5 w-1.5 shrink-0 rounded-full', DOT[e.kind])} /><span className="truncate">{e.title}</span></div>)}
-                    {list.length > 2 && <div className="text-[11px] text-muted">+{list.length - 2}</div>}
+                    {list.slice(0, 2).map(e => (
+                      <div key={e.id} className="flex items-center gap-1 text-[10.5px] leading-tight" title={e.title}>
+                        <i className={cn('h-1.5 w-1.5 shrink-0 rounded-full', DOT[e.kind])} />
+                        <span className="truncate text-dim">{e.title}</span>
+                      </div>
+                    ))}
+                    {list.length > 2 && <div className="silk text-[8px]">+{list.length - 2}</div>}
                   </div>
                 </div>
               );
             })}
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="sm:col-span-1">
-          <h3 className="px-4 pt-4 text-xs font-semibold uppercase tracking-wider text-muted">{fmtMonth(month).split(' ')[0]}</h3>
-          {events.length === 0 ? <p className="px-4 py-10 text-center text-sm text-muted">В этом месяце событий нет. Добавьте повторяющиеся платежи или долги — они появятся здесь.</p> : (
-            <ul className="divide-y divide-line">
+        <Panel label={fmtMonth(month).split(' ')[0]} className="min-w-0">
+          {events.length === 0 ? (
+            <p className="py-10 text-center text-[12px] leading-relaxed text-mute">
+              В этом месяце событий нет. Добавьте повторяющиеся платежи или долги — они появятся здесь.
+            </p>
+          ) : (
+            <ul className="no-bar max-h-[62dvh] overflow-y-auto overscroll-contain">
               {events.map(e => (
                 <li key={e.id}>
-                  <Link to={e.link} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-raised/60">
-                    <span className="tabular w-6 shrink-0 text-sm text-muted">{e.date.slice(8)}</span>
+                  <Link
+                    to={e.link}
+                    className="flex min-h-[46px] items-center gap-3 border-b border-line/60 py-2 transition-colors last:border-0 hover:bg-white/[0.03]"
+                  >
+                    <span className="tnum w-6 shrink-0 text-[12px] text-mute">{e.date.slice(8)}</span>
                     <i className={cn('h-2 w-2 shrink-0 rounded-full', DOT[e.kind])} />
-                    <span className={cn('min-w-0 flex-1 truncate text-sm', e.overdue && 'text-bad')}>{e.title}</span>
-                    {e.amount !== null && <span className={cn('tabular shrink-0 text-sm font-medium', e.amount > 0 && 'text-good')}>{money(e.amount, { sign: true })}</span>}
+                    <span className={cn('min-w-0 flex-1 truncate text-[12.5px]', e.overdue ? 'text-red' : 'text-txt')}>{e.title}</span>
+                    {e.amount !== null && (
+                      <span className={cn('tnum shrink-0 text-[12.5px] font-medium', e.amount > 0 ? 'text-cyan' : 'text-txt')}>
+                        {money(e.amount, { sign: true })}
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}
             </ul>
           )}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-4 py-3 text-[11px] text-muted">
-            <span><i className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-good" />доход</span><span><i className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-warn" />платёж</span>
-            <span><i className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-bad" />долг</span><span><i className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-accent" />авто</span>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-line pt-3">
+            {(
+              [
+                ['bg-cyan', 'доход'],
+                ['bg-warn', 'платёж'],
+                ['bg-red', 'долг'],
+                ['bg-amber', 'авто'],
+              ] as const
+            ).map(([cls, label]) => (
+              <span key={label} className="silk flex items-center gap-1.5">
+                <i className={cn('inline-block h-1.5 w-1.5 rounded-full', cls)} />
+                {label}
+              </span>
+            ))}
           </div>
-        </Card>
+        </Panel>
       </div>
     </div>
   );

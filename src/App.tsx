@@ -39,10 +39,15 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div className="grid min-h-dvh place-items-center px-4 text-center">
-        <div><h1 className="text-lg font-semibold">Что-то пошло не так</h1>
-          <p className="mt-1 text-sm text-muted">Ваши данные в безопасности. Обновите страницу.</p>
-          <Button variant="primary" className="mt-4" onClick={() => window.location.reload()}>Обновить</Button></div>
+      <div className="grid min-h-dvh place-items-center px-4 py-10 text-center">
+        <div className="panel max-w-md px-6 py-8">
+          <p className="silk mb-3">сбой интерфейса</p>
+          <h1 className="text-[19px] font-semibold tracking-[-0.01em]">Что-то пошло не так</h1>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-dim">Ваши данные в безопасности. Обновите страницу.</p>
+          <Button variant="primary" className="mt-5" onClick={() => window.location.reload()}>
+            Обновить
+          </Button>
+        </div>
       </div>
     );
   }
@@ -57,7 +62,12 @@ function Gate() {
     last.current = user?.id ?? '';
   }, [user?.id]);
 
-  if (loading) return <div className="p-6"><PageSkeleton /></div>;
+  if (loading)
+    return (
+      <div className="mx-auto w-full max-w-[1180px] px-4 py-6">
+        <PageSkeleton />
+      </div>
+    );
   if (recovery && user) return <RecoveryPage onDone={clearRecovery} />;
   if (!user) return <AuthPage />;
   return (

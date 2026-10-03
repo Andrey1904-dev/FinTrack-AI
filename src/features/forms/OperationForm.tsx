@@ -1,11 +1,11 @@
-import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { useState } from 'react';
 import { Chips, Field, Input, MoneyInput, Segmented, Select } from '@/components/ui/form';
 import { useCategoryOptions } from '@/data/categories';
 import { useSaveRow } from '@/data/hooks';
+import { parseQuickEntry } from '@/lib/calc';
 import { todayISO } from '@/lib/dates';
 import { num } from '@/lib/format';
-import { parseQuickEntry } from '@/lib/calc';
 import { uid } from '@/lib/utils';
 import type { Operation } from '@/types';
 import { FormShell, useSubmit } from './shared';
@@ -58,19 +58,41 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
     <FormShell onSubmit={submit} saving={saving} error={error || fieldError}>
       {!initial && (
         <>
-          <Segmented value={type} onChange={v => { setType(v); setCategory(v === 'income' ? 'Зарплата' : 'Продукты'); }} className="w-full"
-            options={[{ value: 'expense', label: 'Расход' }, { value: 'income', label: 'Доход' }]} />
-          <Field label="Умный ввод" hint={parsed ? `Распознано: ${parsed.type === 'income' ? 'доход' : 'расход'} ${parsed.amount} ₽ · ${parsed.category} · раздел «${parsed.section}». Проверьте поля ниже и сохраните.` : 'Например: +1200 бензин — поля заполнятся сами'}>
+          <Segmented
+            ariaLabel="Тип операции"
+            value={type}
+            onChange={v => {
+              setType(v);
+              setCategory(v === 'income' ? 'Зарплата' : 'Продукты');
+            }}
+            className="w-full"
+            options={[
+              { value: 'expense', label: 'Расход' },
+              { value: 'income', label: 'Доход' },
+            ]}
+          />
+          <Field
+            label="Умный ввод"
+            hint={
+              parsed
+                ? `Распознано: ${parsed.type === 'income' ? 'доход' : 'расход'} ${parsed.amount} ₽ · ${parsed.category} · раздел «${parsed.section}». Проверьте поля ниже и сохраните.`
+                : 'Например: +1200 бензин — поля заполнятся сами'
+            }
+          >
             {id => (
               <div className="relative">
-                <Sparkles size={15} className="pointer-events-none absolute left-3 top-3 text-muted" />
+                <Sparkles size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
                 <Input id={id} value={smart} onChange={e => applySmart(e.target.value)} placeholder="+1200 бензин" className="pl-9" autoComplete="off" />
               </div>
             )}
           </Field>
         </>
       )}
-      <Field label="Сумма, ₽">{id => <MoneyInput id={id} value={amount} onChange={e => setAmount(e.target.value)} autoFocus={!initial} />}</Field>
+
+      <Field label="Сумма, ₽">
+        {id => <MoneyInput id={id} value={amount} onChange={e => setAmount(e.target.value)} autoFocus={!initial} />}
+      </Field>
+
       <Field label="Категория">
         {() => (
           <div className="space-y-2">
@@ -79,8 +101,12 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
           </div>
         )}
       </Field>
-      <Field label="Комментарий">{id => <Input id={id} value={note} onChange={e => setNote(e.target.value)} placeholder="Например: Газпром" maxLength={300} />}</Field>
-      <div className="grid grid-cols-2 gap-3">
+
+      <Field label="Комментарий">
+        {id => <Input id={id} value={note} onChange={e => setNote(e.target.value)} placeholder="Например: Газпром" maxLength={300} />}
+      </Field>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Дата">{id => <Input id={id} type="date" value={date} onChange={e => setDate(e.target.value)} />}</Field>
         {type === 'income' && (
           <Field label="Регулярность">

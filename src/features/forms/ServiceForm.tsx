@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Field, Input, MoneyInput, Select, Textarea } from '@/components/ui/form';
+import { Button, IconButton } from '@/components/ui/button';
+import { CheckRow, Field, Input, MoneyInput, Select, Textarea } from '@/components/ui/form';
 import { useSaveRow } from '@/data/hooks';
 import { useAuth } from '@/data/auth';
 import { useCurrentCar } from '@/features/cars/useCars';
@@ -67,7 +67,7 @@ export function ServiceForm({ initial, carId, onDone }: { initial?: CarService; 
     });
   };
 
-  if (!cars.length) return <p className="py-6 text-center text-sm text-muted">Сначала добавьте автомобиль в разделе «Авто».</p>;
+  if (!cars.length) return <p className="py-6 text-center text-[12.5px] text-mute">Сначала добавьте автомобиль в разделе «Авто».</p>;
 
   return (
     <FormShell onSubmit={submit} saving={saving} error={error || fieldError}>
@@ -75,28 +75,31 @@ export function ServiceForm({ initial, carId, onDone }: { initial?: CarService; 
         <Field label="Автомобиль">{id => <Select id={id} value={car} onChange={e => setCar(e.target.value)}>{cars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}</Field>
       )}
       <Field label="Что сделано">{id => <Input id={id} value={title} onChange={e => setTitle(e.target.value)} placeholder="Например: Замена масла" autoFocus maxLength={120} />}</Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Дата">{id => <Input id={id} type="date" value={date} onChange={e => setDate(e.target.value)} />}</Field>
         <Field label="Пробег, км">{id => <MoneyInput id={id} value={mileage} onChange={e => setMileage(e.target.value)} />}</Field>
       </div>
       <div className="space-y-2">
-        <p className="text-xs font-medium text-muted">Запчасти и работа</p>
+        <p className="silk">Запчасти и работа</p>
         {items.map((it, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <Input value={it.name} onChange={e => update(idx, { name: e.target.value })} placeholder={it.kind === 'labor' ? 'Работа' : 'Запчасть'} aria-label="Название" className="min-w-0 flex-1" />
-            <Select value={it.kind} onChange={e => update(idx, { kind: e.target.value as ServiceItem['kind'] })} aria-label="Тип" className="w-[104px] shrink-0 px-2">
+          <div key={idx} className="flex flex-wrap items-center gap-2">
+            <Input value={it.name} onChange={e => update(idx, { name: e.target.value })} placeholder={it.kind === 'labor' ? 'Работа' : 'Запчасть'} aria-label="Название" className="min-w-0 flex-1 basis-[160px]" />
+            <Select value={it.kind} onChange={e => update(idx, { kind: e.target.value as ServiceItem['kind'] })} aria-label="Тип" className="w-[110px] shrink-0 px-2">
               <option value="part">Запчасть</option>
               <option value="labor">Работа</option>
             </Select>
-            <MoneyInput value={it.amount} onChange={e => update(idx, { amount: e.target.value })} aria-label="Сумма" className="w-24 shrink-0 text-right" />
-            <Button variant="ghost" size="icon" aria-label="Убрать строку" onClick={() => setItems(list => list.filter((_, i) => i !== idx))}><Trash2 size={16} /></Button>
+            <MoneyInput value={it.amount} onChange={e => update(idx, { amount: e.target.value })} aria-label="Сумма" className="w-[104px] shrink-0 text-right" />
+            <IconButton label="Убрать строку" size="icon-sm" onClick={() => setItems(list => list.filter((_, i) => i !== idx))}><Trash2 size={15} /></IconButton>
           </div>
         ))}
         <Button size="sm" variant="ghost" onClick={() => setItems(list => [...list, { name: '', amount: '', kind: 'part' }])}><Plus size={14} /> Добавить строку</Button>
-        <div className="flex justify-between rounded-lg bg-raised px-3 py-2 text-sm"><span className="text-muted">Итого</span><span className="tabular font-semibold">{money(total)}</span></div>
+        <div className="flex items-center justify-between border border-line bg-rail/40 px-3 py-2.5">
+          <span className="silk">Итого</span>
+          <span className="tnum text-[14px] font-semibold text-txt">{money(total)}</span>
+        </div>
       </div>
       <Field label="Комментарий">{id => <Textarea id={id} value={comment} onChange={e => setComment(e.target.value)} className="min-h-[60px]" maxLength={500} />}</Field>
-      {!initial && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={asExpense} onChange={e => setAsExpense(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--accent))]" /> Учесть в расходах</label>}
+      {!initial && <CheckRow checked={asExpense} onChange={setAsExpense} label="Учесть в расходах" />}
     </FormShell>
   );
 }

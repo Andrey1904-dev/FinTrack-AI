@@ -1,14 +1,16 @@
-import { Check, Copy, Pencil, Plus, Terminal, Trash2 } from 'lucide-react';
+import { Check, Copy, Pencil, Plus, Search, Terminal, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Modal, useConfirm } from '@/components/ui/dialog';
 import { Chips, Field, Input, Textarea } from '@/components/ui/form';
-import { Card, EmptyState, ErrorState, PageHeader, Skeleton } from '@/components/ui/misc';
+import { EmptyState, ErrorState, PageHeader, Panel, Skeleton, Stat } from '@/components/ui/misc';
+import { codeFor } from '@/features/layout/nav';
 import { useToast } from '@/components/ui/toast';
 import { useDeleteRow, useRows, useSaveRow } from '@/data/hooks';
 import { FormShell, useSubmit } from '@/features/forms/shared';
 import { COMMAND_CATEGORIES, DEFAULT_COMMANDS } from '@/lib/constants';
 import { friendlyError } from '@/lib/errors';
+import { plural } from '@/lib/format';
 import type { CommandRow } from '@/types';
 
 async function copyText(text: string): Promise<boolean> {
@@ -32,6 +34,7 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** Monospace command line with a copy button — also used by the global search. */
 export function CommandCopy({ command, description }: { command: string; description?: string }) {
   const [done, setDone] = useState(false);
   const toast = useToast();
@@ -42,12 +45,22 @@ export function CommandCopy({ command, description }: { command: string; descrip
     } else toast.error('Не удалось скопировать — выделите команду вручную.');
   };
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2">
+    <div className="flex items-center gap-2 border border-line bg-bg px-3 py-2">
       <div className="min-w-0 flex-1">
-        <code className="block truncate font-mono text-[13px]">{command}</code>
-        {description && <p className="truncate text-xs text-muted">{description}</p>}
+        <code className="block truncate font-mono text-[12.5px] text-cyan">{command}</code>
+        {description && <p className="mt-0.5 truncate text-[11.5px] text-dim">{description}</p>}
       </div>
-      <Button size="sm" variant="secondary" onClick={copy} aria-label={`Скопировать: ${command}`}>{done ? <><Check size={14} /> Готово</> : <><Copy size={14} /> Скопировать</>}</Button>
+      <Button size="sm" variant="outline" className="shrink-0" onClick={copy} aria-label={`Скопировать: ${command}`}>
+        {done ? (
+          <>
+            <Check size={14} /> Готово
+          </>
+        ) : (
+          <>
+            <Copy size={14} /> <span className="hidden sm:inline">Скопировать</span>
+          </>
+        )}
+      </Button>
     </div>
   );
 }
@@ -59,13 +72,29 @@ function CommandForm({ initial, category, onDone }: { initial?: CommandRow; cate
   const [err, setErr] = useState('');
   const save = useSaveRow('commands');
   const { saving, error, run } = useSubmit('Не удалось сохранить команду', 'Команда сохранена', onDone);
+
   return (
-    <FormShell saving={saving} error={error || err} onSubmit={() => {
-      if (!command.trim()) return setErr('Введите команду');
-      setErr('');
-      void run(() => save.mutateAsync({ id: initial?.id, command: command.trim(), description: description.trim(), category: cat.trim() || 'Linux' }));
-    }}>
-      <Field label="Команда">{id => <Textarea id={id} value={command} onChange={e => setCommand(e.target.value)} className="min-h-[72px] font-mono text-[13px]" autoFocus />}</Field>
+    <FormShell
+      saving={saving}
+      error={error || err}
+      onSubmit={() => {
+        if (!command.trim()) return setErr('Введите команду');
+        setErr('');
+        void run(() => save.mutateAsync({ id: initial?.id, command: command.trim(), description: description.trim(), category: cat.trim() || 'Linux' }));
+      }}
+    >
+      <Field label="Команда">
+        {id => (
+          <Textarea
+            id={id}
+            value={command}
+            onChange={e => setCommand(e.target.value)}
+            className="min-h-[80px] font-mono text-[12.5px]"
+            placeholder="docker system prune -af"
+            autoFocus
+          />
+        )}
+      </Field>
       <Field label="Описание">{id => <Input id={id} value={description} onChange={e => setDescription(e.target.value)} maxLength={200} />}</Field>
       <Field label="Категория">{() => <Chips value={cat} onChange={setCat} options={[...new Set([cat, ...COMMAND_CATEGORIES])]} />}</Field>
     </FormShell>
@@ -81,7 +110,11 @@ export default function CommandsPage() {
   const [cat, setCat] = useState('Все');
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<CommandRow | 'new' | null>(null);
-  const cats = useMemo(() => ['Все', ...new Set([...COMMAND_CATEGORIES.filter(c => rows.some(r => r.category === c)), ...rows.map(r => r.category)])], [rows]);
+
+  const cats = useMemo(
+    () => ['Все', ...new Set([...COMMAND_CATEGORIES.filter(c => rows.some(r => r.category === c)), ...rows.map(r => r.category)])],
+    [rows],
+  );
   const list = rows.filter(r => (cat === 'Все' || r.category === cat) && (!q || `${r.command} ${r.description}`.toLowerCase().includes(q.toLowerCase())));
 
   const seed = async () => {
@@ -92,32 +125,86 @@ export default function CommandsPage() {
       toast.error(friendlyError(e, 'Не удалось добавить команды'));
     }
   };
+
   const remove = async (c: CommandRow) => {
     if (!(await confirm({ title: 'Удалить команду?', text: c.command, confirmText: 'Удалить', danger: true }))) return;
-    try { await del.mutateAsync(c.id); toast.success('Команда удалена'); } catch (e) { toast.error(friendlyError(e, 'Не удалось удалить команду')); }
+    try {
+      await del.mutateAsync(c.id);
+      toast.success('Команда удалена');
+    } catch (e) {
+      toast.error(friendlyError(e, 'Не удалось удалить команду'));
+    }
   };
 
   return (
-    <div className="animate-fade-in">
-      <PageHeader title="Команды" subtitle="Где та самая команда, которую вечно приходится гуглить?" actions={<Button variant="primary" onClick={() => setEdit('new')}><Plus size={16} /> Команда</Button>} />
-      {error ? <ErrorState onRetry={() => void refetch()} /> : isLoading ? <Skeleton className="h-48" /> : rows.length === 0 ? (
-        <Card><EmptyState icon={<Terminal size={20} />} title="Команд пока нет" text={'Сохраняйте команды Linux, Git, Docker и других инструментов —\nи копируйте одним нажатием.'} action="Добавить команду" onAction={() => setEdit('new')} />
-          <div className="-mt-4 pb-6 text-center"><Button variant="ghost" size="sm" onClick={() => void seed()}>или добавить стартовый набор</Button></div></Card>
+    <div className="animate-fadein">
+      <PageHeader
+        title="Команды"
+        code={codeFor('/commands')}
+        subtitle="Где та самая команда, которую вечно приходится гуглить"
+        actions={
+          <Button variant="primary" onClick={() => setEdit('new')}>
+            <Plus size={16} /> Команда
+          </Button>
+        }
+      />
+
+      {error ? (
+        <ErrorState onRetry={() => void refetch()} />
+      ) : isLoading ? (
+        <Skeleton className="h-64" />
+      ) : rows.length === 0 ? (
+        <Panel label="Команды">
+          <EmptyState
+            icon={<Terminal size={18} />}
+            title="Команд пока нет"
+            text={'Сохраняйте команды Linux, Git, Docker и других инструментов —\nи копируйте одним нажатием.'}
+            action="Добавить команду"
+            onAction={() => setEdit('new')}
+          />
+          <div className="mt-4 flex justify-center">
+            <Button variant="ghost" size="sm" onClick={() => void seed()}>
+              или добавить стартовый набор
+            </Button>
+          </div>
+        </Panel>
       ) : (
         <>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Найти команду" aria-label="Найти команду" className="sm:max-w-xs" />
-            <Chips value={cat} onChange={setCat} options={cats} />
+          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <Stat label="Всего команд" value={rows.length} sub={plural(rows.length, ['запись', 'записи', 'записей'])} />
+            <Stat label="Категории" value={Math.max(0, cats.length - 1)} sub="разделов шпаргалки" />
+            <Stat label="В выборке" value={list.length} tone="accent" sub={cat === 'Все' ? 'все категории' : cat} />
           </div>
-          {list.length === 0 ? <p className="py-10 text-center text-sm text-muted">Ничего не найдено.</p> : (
-            <div className="grid gap-2 lg:grid-cols-2">
-              {list.map(c => (
-                <div key={c.id} className="card group p-3">
-                  <div className="mb-2 flex items-center justify-between"><span className="text-xs text-muted">{c.category}</span>
-                    <span className="flex opacity-60 transition-opacity group-hover:opacity-100">
-                      <Button variant="ghost" size="icon" aria-label="Изменить" onClick={() => setEdit(c)}><Pencil size={14} /></Button>
-                      <Button variant="ghost" size="icon" aria-label="Удалить" onClick={() => void remove(c)}><Trash2 size={14} /></Button>
-                    </span></div>
+
+          <div className="mb-4 space-y-3">
+            <div className="relative sm:max-w-sm">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
+              <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Найти команду" aria-label="Найти команду" className="pl-9" />
+            </div>
+            <div className="no-bar -mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+              <Chips value={cat} onChange={setCat} options={cats} />
+            </div>
+          </div>
+
+          {list.length === 0 ? (
+            <Panel>
+              <EmptyState compact title="Ничего не найдено" text="Измените запрос или выберите другую категорию." />
+            </Panel>
+          ) : (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {list.map((c, i) => (
+                <div key={c.id} className="rise panel group p-3" style={i < 12 && i ? { animationDelay: `${i * 25}ms` } : undefined}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="silk-b text-mute">{c.category}</span>
+                    <span className="-mr-1 flex opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <IconButton label="Изменить команду" size="icon-sm" onClick={() => setEdit(c)}>
+                        <Pencil size={14} />
+                      </IconButton>
+                      <IconButton label="Удалить команду" size="icon-sm" onClick={() => void remove(c)}>
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </span>
+                  </div>
                   <CommandCopy command={c.command} description={c.description} />
                 </div>
               ))}
@@ -125,6 +212,7 @@ export default function CommandsPage() {
           )}
         </>
       )}
+
       <Modal open={!!edit} onOpenChange={o => !o && setEdit(null)} title={edit === 'new' ? 'Новая команда' : 'Изменить команду'}>
         {edit && <CommandForm initial={edit === 'new' ? undefined : edit} category={cat !== 'Все' ? cat : undefined} onDone={() => setEdit(null)} />}
       </Modal>
