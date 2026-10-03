@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CheckRow, Chips, Field, Input, MoneyInput, Select } from '@/components/ui/form';
-import { useSaveRow } from '@/data/hooks';
+import { useInvalidate, useSaveRow } from '@/data/hooks';
 import { useAuth } from '@/data/auth';
 import { useCurrentCar } from '@/features/cars/useCars';
 import { supabase } from '@/lib/supabase';
@@ -27,6 +27,7 @@ export function RefuelForm({ initial, carId, onDone }: { initial?: CarRefuel; ca
   const [fieldError, setFieldError] = useState('');
   const { user } = useAuth();
   const save = useSaveRow('car_refuels');
+  const invalidate = useInvalidate();
   const { saving, error, run } = useSubmit('Не удалось сохранить заправку', 'Заправка записана', onDone);
 
   const onLiters = (v: string) => {
@@ -70,6 +71,7 @@ export function RefuelForm({ initial, carId, onDone }: { initial?: CarRefuel; ca
       if (selected && num(mileage) > selected.mileage) {
         await supabase.from('cars').update({ mileage: Math.round(num(mileage)) }).eq('id', selected.id);
       }
+      await invalidate('cars', 'finance_operations');
     });
   };
 

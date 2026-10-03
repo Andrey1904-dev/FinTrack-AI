@@ -20,7 +20,7 @@ export default function FinancePage() {
       <PageHeader
         title="Финансы"
         code={codeFor('/finance')}
-        subtitle="Куда уходят деньги: операции, повторяющиеся платежи, календарь, прогноз и лимиты."
+        subtitle="Операции, повторяющиеся платежи, календарь, прогноз остатка и месячный план/факт."
         actions={
           <>
             <Button onClick={() => quick.open('income')}>
@@ -42,7 +42,7 @@ export default function FinancePage() {
           { value: 'recurring', label: 'Повторяющиеся' },
           { value: 'calendar', label: 'Календарь' },
           { value: 'forecast', label: 'Прогноз' },
-          { value: 'budgets', label: 'Лимиты' },
+          { value: 'budgets', label: 'План / лимиты' },
         ]}
       />
 

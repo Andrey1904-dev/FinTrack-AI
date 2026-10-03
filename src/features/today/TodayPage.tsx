@@ -11,6 +11,7 @@ import { TaskForm } from '@/features/forms/TaskForm';
 import { useOverview } from '@/features/overview/useOverview';
 import { TaskRow } from '@/features/tasks/TasksPage';
 import { reminderState } from '@/lib/calc';
+import { CashFlowTodayBanner } from '@/features/finance/CashFlowPanel';
 import { addDaysISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { fmtDateLong, greeting, money, relativeDays } from '@/lib/format';
@@ -102,6 +103,8 @@ export default function TodayPage() {
           </Button>
         }
       />
+
+      <CashFlowTodayBanner />
 
       {/* оперативная сводка */}
       <section className="rise panel mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3" style={{ animationDelay: '40ms' }}>

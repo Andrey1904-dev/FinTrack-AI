@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
 import { useRows } from '@/data/hooks';
-import { addDaysISO, monthKey, todayISO } from '@/lib/dates';
+import { addDaysISO, lastMonthKeys, monthKey, monthStart, todayISO } from '@/lib/dates';
 import { buildEvents, debtProgress, monthStats, totalDebt, type CalendarEvent } from '@/lib/calc';
 import type { Task } from '@/types';
 
 /** One place that gathers the numbers the Dashboard, Today and notifications are made of. */
 export function useOverview() {
-  const ops = useRows('finance_operations');
+  const today = todayISO();
+  // Dashboard/Today only need the last six months for summaries and trends; the full ledger remains available on the history/export screens.
+  const operationsFrom = monthStart(lastMonthKeys(6, today)[0]);
+  const ops = useRows('finance_operations', { from: operationsFrom, to: today });
   const recurring = useRows('recurring_payments');
   const debts = useRows('debts');
   const cars = useRows('cars');
@@ -19,7 +22,6 @@ export function useOverview() {
   const loading = all.some(q => q.isLoading);
   const error = all.find(q => q.error)?.error ?? null;
 
-  const today = todayISO();
   const data = useMemo(() => {
     const stats = monthStats(ops.rows, monthKey(today));
     const sources = { recurring: recurring.rows, debts: debts.rows, reminders: reminders.rows, cars: cars.rows, goals: goals.rows };
