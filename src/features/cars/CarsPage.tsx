@@ -142,8 +142,9 @@ export default function CarsPage() {
     }
   };
 
-  const removeRow = async (kind: 'refuel' | 'service' | 'expense' | 'reminder', id: string, title: string) => {
-    if (!(await confirm({ title: 'Удалить запись?', text: title, confirmText: 'Удалить', danger: true }))) return;
+  const removeRow = async (kind: 'refuel' | 'service' | 'expense' | 'reminder', id: string, title: string, operationId?: string | null) => {
+    const text = operationId ? `${title}\nСвязанная операция в общем финансовом журнале останется.` : title;
+    if (!(await confirm({ title: 'Удалить запись?', text, confirmText: 'Удалить', danger: true }))) return;
     try {
       await { refuel: delRefuel, service: delService, expense: delExpense, reminder: delReminder }[kind].mutateAsync(id);
       toast.success('Запись удалена');
@@ -414,7 +415,7 @@ export default function CarsPage() {
                           <IconButton label="Изменить заправку" size="icon-sm" onClick={() => setModal({ kind: 'refuel', item: r })}>
                             <Pencil size={14} />
                           </IconButton>
-                          <IconButton label="Удалить заправку" size="icon-sm" onClick={() => void removeRow('refuel', r.id, `${fmtDate(r.date)} · ${money(r.total)}`)}>
+                          <IconButton label="Удалить заправку" size="icon-sm" onClick={() => void removeRow('refuel', r.id, `${fmtDate(r.date)} · ${money(r.total)}`, r.operation_id)}>
                             <Trash2 size={14} />
                           </IconButton>
                         </>
@@ -452,7 +453,7 @@ export default function CarsPage() {
                         <IconButton label="Изменить запись" size="icon-sm" onClick={() => setModal({ kind: 'service', item: s })}>
                           <Pencil size={14} />
                         </IconButton>
-                        <IconButton label="Удалить запись" size="icon-sm" onClick={() => void removeRow('service', s.id, s.title)}>
+                        <IconButton label="Удалить запись" size="icon-sm" onClick={() => void removeRow('service', s.id, s.title, s.operation_id)}>
                           <Trash2 size={14} />
                         </IconButton>
                       </div>
@@ -506,7 +507,7 @@ export default function CarsPage() {
                           <IconButton label="Изменить расход" size="icon-sm" onClick={() => setModal({ kind: 'expense', item: e })}>
                             <Pencil size={14} />
                           </IconButton>
-                          <IconButton label="Удалить расход" size="icon-sm" onClick={() => void removeRow('expense', e.id, `${e.category} · ${money(e.amount)}`)}>
+                          <IconButton label="Удалить расход" size="icon-sm" onClick={() => void removeRow('expense', e.id, `${e.category} · ${money(e.amount)}`, e.operation_id)}>
                             <Trash2 size={14} />
                           </IconButton>
                         </>

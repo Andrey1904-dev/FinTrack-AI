@@ -228,11 +228,25 @@ export interface DashboardConfig {
   hidden?: string[];
 }
 
+export interface MonthlyBudgetPlan {
+  expected_income: number;
+  mandatory_expenses: number;
+  debt_payment: number;
+  savings_target: number;
+}
+
+export interface ProfileSettings extends Record<string, unknown> {
+  /** User-entered total spendable balance across cash and accounts, not bank-synced. */
+  current_balance?: number;
+  minimum_safe_balance?: number;
+  monthly_budgets?: Record<string, MonthlyBudgetPlan>;
+}
+
 export interface Profile {
   user_id: string;
   display_name: string;
   dashboard_config: DashboardConfig;
-  settings: Record<string, unknown>;
+  settings: ProfileSettings;
   created_at: string;
   updated_at: string;
 }

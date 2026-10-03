@@ -57,6 +57,7 @@ export function CarExpenseForm({ initial, carId, onDone }: { initial?: CarExpens
   const [asExpense, setAsExpense] = useState(!initial);
   const [err, setErr] = useState('');
   const save = useSaveRow('car_expenses');
+  const invalidate = useInvalidate();
   const { saving, error, run } = useSubmit('Не удалось сохранить расход на авто', 'Расход на авто сохранён', onDone);
   return (
     <FormShell saving={saving} error={error || err} onSubmit={() => {
@@ -75,6 +76,7 @@ export function CarExpenseForm({ initial, carId, onDone }: { initial?: CarExpens
         }
         try {
           await save.mutateAsync({ id: initial?.id, car_id: car, category, title: title.trim(), amount: num(amount), date, mileage: Math.round(num(mileage)), comment: comment.trim(), operation_id: operationId });
+          await invalidate('finance_operations');
         } catch (e) {
           if (operationId && !initial?.operation_id) await supabase.from('finance_operations').delete().eq('id', operationId);
           throw e;

@@ -87,15 +87,19 @@ export function LineChart({
           const compact = w < 480;
           const h = height ?? (compact ? 180 : 230);
           const pad = { l: compact ? 38 : 50, r: 10, t: 12, b: 24 };
+          const minValue = Math.min(...points.map(p => p.y), 0);
           const maxY = niceMax(Math.max(...points.map(p => p.y), 1));
+          const minY = minValue < 0 ? -niceMax(Math.abs(minValue)) : 0;
+          const spanY = maxY - minY || 1;
+          const plotHeight = h - pad.t - pad.b;
           const minX = points[0].x;
           const maxX = points[points.length - 1].x;
           const spanX = maxX - minX || 1;
           const px = (x: number) => pad.l + ((x - minX) / spanX) * (w - pad.l - pad.r);
-          const py = (y: number) => pad.t + (1 - y / maxY) * (h - pad.t - pad.b);
+          const py = (y: number) => pad.t + (1 - (y - minY) / spanY) * plotHeight;
           const path = points.map((p, i) => `${i ? 'L' : 'M'}${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
           const area = `${path} L${px(maxX).toFixed(1)},${py(0)} L${px(minX).toFixed(1)},${py(0)} Z`;
-          const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => t * maxY);
+          const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => minY + t * spanY);
           const labelIdx = new Set([0, points.length - 1, Math.floor((points.length - 1) / 2)]);
           const showDots = points.length <= 14;
 
@@ -116,6 +120,12 @@ export function LineChart({
                   </text>
                 </g>
               ))}
+              {minY < 0 && (
+                <g>
+                  <line x1={pad.l} x2={w - pad.r} y1={py(0)} y2={py(0)} stroke="#68716F" strokeWidth="1.2" />
+                  <text x={pad.l - 6} y={py(0) + 3.5} textAnchor="end" fontSize={compact ? 9 : 10} fill="#A7B0AD" className="tnum">0</text>
+                </g>
+              )}
 
               {points.length > 1 && <path d={area} fill={`url(#${gid})`} />}
               {points.length > 1 && (

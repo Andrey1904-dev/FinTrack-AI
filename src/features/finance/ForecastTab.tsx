@@ -6,6 +6,7 @@ import { buildForecast, monthlyAverage, simulatePayoff } from '@/lib/calc';
 import { addMonthsISO } from '@/lib/dates';
 import { fmtDate, fmtMonth, money, plural } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { CashFlowForecastPanel } from './CashFlowPanel';
 
 export function ForecastTab() {
   const o = useOverview();
@@ -26,7 +27,11 @@ export function ForecastTab() {
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <CashFlowForecastPanel />
+
+      <div className="h-px bg-line" />
+      <div className="space-y-4">
       <p className="max-w-[70ch] text-[12px] leading-relaxed text-mute">
         Прогноз строится по вашим долгам и средним доходам и расходам за последние месяцы. Это расчёт, а не обещание: реальные цифры будут отличаться.
       </p>
@@ -86,6 +91,7 @@ export function ForecastTab() {
           {plural(avg.months, ['месяцу', 'месяцам', 'месяцам'])} с данными).
         </p>
       </Panel>
+      </div>
     </div>
   );
 }

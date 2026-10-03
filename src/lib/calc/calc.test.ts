@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   annuityPayment, balanceAfter, buildForecast, calcOwnership, calcWhatIf, carCosts, debtHistory, debtProgress,
   fuelStats, monthlyAverage, monthStats, occurrencesBetween, parseQuickEntry, reminderState, simulatePayoff,
-  byCategory, loanSummary, advance, buildEvents, buildCandidates,
+  byCategory, loanSummary, advance, buildEvents, buildCandidates, buildCashFlowForecast, calcMonthlyBudget, calcMonthlyBudgetActuals,
 } from './index';
 import { addMonthsISO, daysBetween, lastMonthKeys } from '../dates';
 import { toCSV } from '../export';
 import { money, plural, relativeDays } from '../format';
-import type { CarRefuel, CarReminder, Debt, DebtPayment, Operation, RecurringPayment, CarScenarioParams } from '@/types';
+import type { Car, CarExpense, CarRefuel, CarReminder, CarService, Debt, DebtPayment, Goal, MonthlyBudgetPlan, Operation, RecurringPayment, CarScenarioParams } from '@/types';
 
 const base = { user_id: 'u', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
 
@@ -22,6 +22,28 @@ const op = (o: Partial<Operation>): Operation => ({
 const refuel = (o: Partial<CarRefuel>): CarRefuel => ({
   id: Math.random().toString(), ...base, car_id: 'c', date: '2026-01-01', mileage: 0, liters: 0, price_per_liter: 0, total: 0,
   station: '', fuel_type: '', full_tank: true, operation_id: null, ...o,
+});
+const recurring = (o: Partial<RecurringPayment>): RecurringPayment => ({
+  id: 'r', ...base, title: 'Платёж', amount: 1000, kind: 'expense', category: 'Другое', frequency: 'monthly',
+  day_of_month: 5, next_date: '2026-10-05', active: true, comment: '', ...o,
+});
+const goal = (o: Partial<Goal>): Goal => ({
+  id: 'g', ...base, title: 'Резерв', category: 'Накопления', target_amount: 300000, current_amount: 0,
+  deadline: '2026-12-31', comment: '', status: 'active', ...o,
+});
+const car = (o: Partial<Car>): Car => ({
+  id: 'c', ...base, name: 'Авто', year: 2020, engine: '', mileage: 10000, fuel_type: 'АИ-95', is_current: true, comment: '', ...o,
+});
+const carExpense = (o: Partial<CarExpense>): CarExpense => ({
+  id: 'e', ...base, car_id: 'c', date: '2026-01-01', mileage: 0, category: 'Ремонт', title: '', amount: 0, comment: '', operation_id: null, ...o,
+});
+const carService = (o: Partial<CarService>): CarService => ({
+  id: 's', ...base, car_id: 'c', date: '2026-01-01', mileage: 0, title: 'ТО', parts_cost: 0, labor_cost: 0,
+  items: [], total: 0, comment: '', operation_id: null, ...o,
+});
+const debtPayment = (o: Partial<DebtPayment>): DebtPayment => ({
+  id: 'p', ...base, debt_id: 'd', amount: 0, principal_amount: 0, paid_at: '2026-10-01', comment: '',
+  balance_after: null, advanced: false, operation_id: null, ...o,
 });
 
 describe('dates and formatting', () => {
@@ -266,6 +288,136 @@ describe('calendar events and notifications', () => {
     const ev = buildEvents(src, '2026-10-01', '2026-10-31', '2026-10-04');
     const n = buildCandidates({ events: ev, reminders: [], cars: [], goals: [], tasks: [], today: '2026-10-04' });
     expect(n.map(x => x.title)).toContain('Платёж завтра: МТС');
+  });
+});
+
+describe('cash flow and safe balance', () => {
+  const input = (o: Partial<Parameters<typeof buildCashFlowForecast>[0]> = {}) => ({
+    currentBalance: 100000, minimumSafeBalance: 30000, recurring: [], debts: [], goals: [], cars: [],
+    refuels: [], carExpenses: [], carService: [], horizonDays: 30, today: '2026-10-02', ...o,
+  });
+
+  it('projects recurring income and expenses by date', () => {
+    const result = buildCashFlowForecast(input({
+      horizonDays: 7,
+      recurring: [
+        recurring({ id: 'salary', title: 'Зарплата', kind: 'income', amount: 50000, next_date: '2026-10-05' }),
+        recurring({ id: 'rent', title: 'Аренда', amount: 20000, next_date: '2026-10-05' }),
+      ],
+    }));
+    expect(result.events.map(e => [e.date, e.amount])).toEqual([['2026-10-05', -20000], ['2026-10-05', 50000]]);
+    expect(result.points.find(p => p.date === '2026-10-05')?.balance).toBe(130000);
+    expect(result.endingBalance).toBe(130000);
+    expect(result.status).toBe('safe');
+  });
+
+  it('pulls one overdue recurring payment to today and forecasts the next cycle', () => {
+    const result = buildCashFlowForecast(input({
+      horizonDays: 35,
+      recurring: [recurring({ next_date: '2026-09-05', amount: 2000, day_of_month: 5 })],
+    }));
+    expect(result.events.map(e => e.date)).toEqual(['2026-10-02', '2026-10-05', '2026-11-05']);
+    expect(result.events.filter(e => e.date === '2026-10-02')).toHaveLength(1);
+  });
+
+  it('includes scheduled minimum debt payments and reports missing schedules', () => {
+    const result = buildCashFlowForecast(input({
+      horizonDays: 40,
+      debts: [
+        debt({ id: 'scheduled', name: 'Кредит', balance: 50000, min_payment: 10000, next_payment_date: '2026-10-10' }),
+        debt({ id: 'unknown', name: 'Без графика', balance: 30000, min_payment: 5000, next_payment_date: null }),
+      ],
+    }));
+    expect(result.events.filter(e => e.kind === 'debt').map(e => e.amount)).toEqual([-10000, -10000]);
+    expect(result.assumptions.debtsWithoutSchedule).toBe(1);
+  });
+
+  it('prorates the first interest interval and does not add past interest to an overdue payment', () => {
+    const future = buildCashFlowForecast(input({
+      horizonDays: 20,
+      debts: [debt({ balance: 10000, interest_rate: 12, min_payment: 20000, next_payment_date: '2026-10-12' })],
+    }));
+    expect(future.events.find(e => e.kind === 'debt')?.amount).toBe(-10032.89);
+
+    const overdue = buildCashFlowForecast(input({
+      horizonDays: 0,
+      debts: [debt({ balance: 10000, interest_rate: 12, min_payment: 20000, next_payment_date: '2026-09-12' })],
+    }));
+    expect(overdue.events.find(e => e.kind === 'debt')?.amount).toBe(-10000);
+  });
+
+  it('models planned goal contributions and purchases as cash outflows', () => {
+    const result = buildCashFlowForecast(input({
+      horizonDays: 60,
+      goals: [goal({ target_amount: 300000, current_amount: 100000, deadline: '2026-12-31' })],
+      plannedPurchases: [{ id: 'bike', title: 'Покупка', price: 15000, date: '2026-10-04' }],
+    }));
+    expect(result.events.filter(e => e.kind === 'goal').map(e => e.amount)).toEqual([-66666.67, -66666.67]);
+    expect(result.events.find(e => e.kind === 'purchase')?.amount).toBe(-15000);
+    expect(result.endingBalance).toBeCloseTo(-48333.34, 1);
+    expect(result.status).toBe('risk');
+    expect(result.firstUnsafeDate).toBe('2026-10-31');
+  });
+
+  it('estimates current-car spend only when there is enough history', () => {
+    const result = buildCashFlowForecast(input({
+      today: '2026-10-03',
+      horizonDays: 60,
+      cars: [car({ id: 'current', is_current: true }), car({ id: 'other', is_current: false })],
+      refuels: [
+        refuel({ id: 'year-old', car_id: 'current', date: '2025-10-04', total: 11500 }),
+        refuel({ id: 'other-car', car_id: 'other', date: '2026-10-01', total: 100000 }),
+      ],
+      carExpenses: [carExpense({ car_id: 'current', date: '2025-10-04', amount: 15000 })],
+      carService: [carService({ car_id: 'current', date: '2025-10-04', total: 10000 })],
+    }));
+    expect(result.assumptions.estimatedCarMonthly).toBeCloseTo(3040, 0);
+    expect(result.events.filter(e => e.kind === 'car')).toHaveLength(2);
+    expect(result.events.every(e => e.title === 'Оценка расходов на автомобиль')).toBe(true);
+  });
+
+  it('sets safe, attention, risk and unset statuses deterministically', () => {
+    expect(buildCashFlowForecast(input({ currentBalance: 40000, horizonDays: 0 })).status).toBe('safe');
+    expect(buildCashFlowForecast(input({ currentBalance: 20000, horizonDays: 0 })).status).toBe('attention');
+    expect(buildCashFlowForecast(input({ currentBalance: -1, horizonDays: 0 })).status).toBe('risk');
+    expect(buildCashFlowForecast(input({ currentBalance: 40000, minimumSafeBalance: null, horizonDays: 0 })).status).toBe('unset');
+    expect(buildCashFlowForecast(input({ currentBalance: 1000, minimumSafeBalance: 0, horizonDays: 0 })).status).toBe('safe');
+  });
+
+  it('returns one balance point per day and caps the horizon at 24 months', () => {
+    const result = buildCashFlowForecast(input({ horizonDays: 1000 }));
+    expect(result.points).toHaveLength(731);
+    expect(result.points[0].date).toBe('2026-10-02');
+    expect(result.points[730].date).toBe('2028-10-01');
+  });
+});
+
+describe('monthly budget plan versus actual', () => {
+  const plan: MonthlyBudgetPlan = { expected_income: 150000, mandatory_expenses: 60000, debt_payment: 20000, savings_target: 30000 };
+  it('summarizes only the selected month and avoids double-counting linked debt operations', () => {
+    const actuals = calcMonthlyBudgetActuals([
+      op({ id: 'salary', type: 'income', amount: 100000, date: '2026-10-02' }),
+      op({ id: 'food', amount: 30000, category: 'Продукты', date: '2026-10-03' }),
+      op({ id: 'debt-linked', amount: 9000, category: 'Кредиты', date: '2026-10-04' }),
+      op({ id: 'debt-manual', amount: 2000, category: 'Кредиты', date: '2026-10-05' }),
+      op({ id: 'saving', amount: 5000, category: 'Накопления', date: '2026-10-06' }),
+      op({ id: 'old', amount: 70000, date: '2026-09-30' }),
+    ], [
+      debtPayment({ id: 'p-current', amount: 9000, paid_at: '2026-10-04', operation_id: 'debt-linked' }),
+      debtPayment({ id: 'p-old', amount: 1000, paid_at: '2026-09-30' }),
+    ], '2026-10');
+    expect(actuals).toEqual({ income: 100000, mandatoryExpenses: 30000, debtPayments: 11000, savings: 5000 });
+  });
+  it('computes remaining amounts and completion percentages', () => {
+    const lines = calcMonthlyBudget(plan, { income: 90000, mandatoryExpenses: 45000, debtPayments: 10000, savings: 35000 });
+    expect(lines.map(({ planned, actual, remaining, completion }) => [planned, actual, remaining, completion])).toEqual([
+      [150000, 90000, 60000, 60], [60000, 45000, 15000, 75], [20000, 10000, 10000, 50], [30000, 35000, -5000, 116.67],
+    ]);
+  });
+  it('preserves a negative actual savings amount', () => {
+    const lines = calcMonthlyBudget(plan, { income: 50000, mandatoryExpenses: 60000, debtPayments: 20000, savings: -30000 });
+    expect(lines[3].actual).toBe(-30000);
+    expect(lines[3].remaining).toBe(60000);
   });
 });
 

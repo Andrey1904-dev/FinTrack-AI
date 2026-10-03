@@ -14,32 +14,58 @@ const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> 
   learning_topics: { column: 'position', ascending: true },
   learning_tracks: { column: 'position', ascending: true },
 };
+const DATE_COLUMN: Partial<Record<TableName, string>> = {
+  finance_operations: 'date',
+  recurring_payments: 'next_date',
+  debt_payments: 'paid_at',
+  car_refuels: 'date',
+  car_expenses: 'date',
+  car_service: 'date',
+  car_reminders: 'due_date',
+  financial_goals: 'deadline',
+  tasks: 'due_date',
+  notifications: 'due_date',
+};
+
+export interface RowWindow {
+  /** Inclusive lower date bound. Supported only for tables with a date column. */
+  from?: string;
+  /** Inclusive upper date bound. Supported only for tables with a date column. */
+  to?: string;
+  /** Maximum number of newest/ordered rows to fetch. */
+  limit?: number;
+}
 
 export const rowsKey = (table: TableName, userId: string | undefined) => ['rows', table, userId] as const;
 
-async function fetchAll<K extends TableName>(table: K): Promise<TableMap[K][]> {
+async function fetchAll<K extends TableName>(table: K, window?: RowWindow): Promise<TableMap[K][]> {
   const order = ORDER[table] ?? { column: 'created_at', ascending: false };
+  const dateColumn = DATE_COLUMN[table];
+  if ((window?.from || window?.to) && !dateColumn) throw new Error(`Date filtering is not supported for ${table}`);
+  const limit = window?.limit && window.limit > 0 ? Math.floor(window.limit) : undefined;
   const out: TableMap[K][] = [];
-  for (let from = 0; from < 50_000; from += PAGE) {
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
+  for (let from = 0; from < 50_000 && (!limit || out.length < limit); from += PAGE) {
+    const last = limit ? Math.min(from + PAGE - 1, limit - 1) : from + PAGE - 1;
+    let request = supabase.from(table).select('*');
+    if (dateColumn && window?.from) request = request.gte(dateColumn, window.from);
+    if (dateColumn && window?.to) request = request.lte(dateColumn, window.to);
+    const { data, error } = await request
       .order(order.column, { ascending: order.ascending })
       .order('created_at', { ascending: false })
-      .range(from, from + PAGE - 1);
+      .range(from, last);
     if (error) throw error;
     out.push(...((data ?? []) as TableMap[K][]));
-    if (!data || data.length < PAGE) break;
+    if (!data || data.length < Math.min(PAGE, last - from + 1)) break;
   }
   return out;
 }
 
-/** All rows of a table that belong to the signed-in user (RLS guarantees the filtering on the server). */
-export function useRows<K extends TableName>(table: K) {
+/** All matching rows belong to the signed-in user (RLS enforces ownership server-side). */
+export function useRows<K extends TableName>(table: K, window?: RowWindow) {
   const { user } = useAuth();
   const query = useQuery({
-    queryKey: rowsKey(table, user?.id),
-    queryFn: () => fetchAll(table),
+    queryKey: [...rowsKey(table, user?.id), window ?? null],
+    queryFn: () => fetchAll(table, window),
     enabled: !!user,
     staleTime: 30_000,
   });
@@ -111,7 +137,7 @@ export function useProfile() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['profile'] }),
   });
-  return { profile: query.data ?? null, isLoading: query.isLoading, save };
+  return { profile: query.data ?? null, isLoading: query.isLoading, error: query.error, save, refetch: query.refetch };
 }
 
 const DASH_KEY = 'pos.dashboard';

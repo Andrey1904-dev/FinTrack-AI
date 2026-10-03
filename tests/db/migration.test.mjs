@@ -51,6 +51,9 @@ await db.query(`insert into public.finance_operations(user_id, client_id, type, 
 // 3. Apply Personal OS migration (twice: it must be idempotent)
 await db.exec(sql('202610020001_personal_os.sql'));
 await db.exec(sql('202610020001_personal_os.sql'));
+for (const f of files.filter(f => f > '202610020001')) await db.exec(sql(f));
+// Additive trigger migrations must also be safe to reapply.
+for (const f of files.filter(f => f > '202610020001')) await db.exec(sql(f));
 
 const q = async (text, params) => (await db.query(text, params)).rows;
 const asUser = async (uid, fn) => {
@@ -98,9 +101,49 @@ await asUser(B, async () => {
   await db.query(`update public.debts set balance = 0 where user_id = $1`, [A]);
 });
 assert.equal(Number((await q(`select balance from public.debts where id = $1`, [loan.id]))[0].balance), 198000, 'B cannot update A debts');
+let linkedCarOperationId;
 await asUser(A, async () => {
   const [car] = await q(`insert into public.cars(name) values ('Lada') returning id`);
-  await db.query(`insert into public.car_refuels(car_id, liters, total) values ($1, 30, 1800)`, [car.id]);
+  const [operation] = await q(`insert into public.finance_operations(user_id, client_id, type, amount, category, note, date)
+    values ($1, 'car-refuel-linked', 'expense', 1800, 'Другое', 'old', '2026-10-02') returning id`, [A]);
+  linkedCarOperationId = operation.id;
+  const [refuel] = await q(`insert into public.car_refuels(car_id, date, liters, total, station, operation_id)
+    values ($1, '2026-10-02', 30, 1800, 'АЗС Один', $2) returning id`, [car.id, operation.id]);
+  let synced = (await q(`select amount, category, note, date from public.finance_operations where id = $1`, [operation.id]))[0];
+  assert.equal(Number(synced.amount), 1800);
+  assert.equal(synced.category, 'Топливо');
+  assert.equal(synced.note, 'Заправка · АЗС Один');
+
+  await db.query(`update public.car_refuels set total = 1900, station = 'АЗС Два', date = '2026-10-03' where id = $1`, [refuel.id]);
+  synced = (await q(`select amount, category, note, date from public.finance_operations where id = $1`, [operation.id]))[0];
+  assert.equal(Number(synced.amount), 1900, 'editing a refuel updates the shared ledger');
+  assert.equal(synced.note, 'Заправка · АЗС Два');
+  assert.equal(String(synced.date.toISOString?.().slice(0, 10) ?? synced.date), '2026-10-03');
+  await assert.rejects(() => db.query(`update public.car_refuels set total = -1 where id = $1`, [refuel.id]), /check constraint/);
+  assert.equal(Number((await q(`select amount from public.finance_operations where id = $1`, [operation.id]))[0].amount), 1900,
+    'a rejected car-log write leaves the ledger unchanged');
+  await db.query(`delete from public.car_refuels where id = $1`, [refuel.id]);
+  assert.equal((await q(`select * from public.finance_operations where id = $1`, [operation.id])).length, 1,
+    'deleting a car-only record preserves the independent finance history');
+
+  const [expenseOp] = await q(`insert into public.finance_operations(user_id, client_id, type, amount, category, date)
+    values ($1, 'car-expense-linked', 'expense', 1, 'Другое', '2026-10-02') returning id`, [A]);
+  await db.query(`insert into public.car_expenses(car_id, date, category, title, amount, operation_id)
+    values ($1, '2026-10-02', 'Мойка', 'Экспресс', 500, $2)`, [car.id, expenseOp.id]);
+  const syncedExpense = (await q(`select amount, category, note from public.finance_operations where id = $1`, [expenseOp.id]))[0];
+  assert.equal(Number(syncedExpense.amount), 500);
+  assert.equal(syncedExpense.category, 'Автомобиль');
+  assert.equal(syncedExpense.note, 'Мойка: Экспресс');
+
+  const [serviceOp] = await q(`insert into public.finance_operations(user_id, client_id, type, amount, category, date)
+    values ($1, 'car-service-linked', 'expense', 1, 'Другое', '2026-10-02') returning id`, [A]);
+  await db.query(`insert into public.car_service(car_id, date, title, total, operation_id)
+    values ($1, '2026-10-02', 'Замена масла', 2500, $2)`, [car.id, serviceOp.id]);
+  const syncedService = (await q(`select amount, category, note from public.finance_operations where id = $1`, [serviceOp.id]))[0];
+  assert.equal(Number(syncedService.amount), 2500);
+  assert.equal(syncedService.category, 'Автомобиль');
+  assert.equal(syncedService.note, 'Обслуживание: Замена масла');
+
   assert.equal((await q(`select * from public.tasks`)).length, 0, 'A cannot read B tasks');
 });
 await asUser(B, async () => {
@@ -109,6 +152,10 @@ await asUser(B, async () => {
 });
 const carA = (await q(`select id from public.cars where user_id = $1`, [A]))[0].id;
 await asUser(B, async () => {
+  const [carB] = await q(`insert into public.cars(name) values ('B car') returning id`);
+  await assert.rejects(() => db.query(`insert into public.car_refuels(car_id, liters, total, operation_id)
+    values ($1, 1, 1, $2)`, [carB.id, linkedCarOperationId]), /Linked finance operation is missing or not owned by this user/,
+    'B cannot link a vehicle record to A finance operation');
   await assert.rejects(() => db.query(`insert into public.car_refuels(car_id, liters, total) values ($1, 1, 1)`, [carA]), /row-level security/, 'B cannot attach rows to A car');
 });
 await asUser(A, async () => {

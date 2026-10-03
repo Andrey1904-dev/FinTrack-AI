@@ -18,9 +18,11 @@ import { friendlyError } from '@/lib/errors';
 import { fmtDateLong, fmtMonthShort, greeting, money, pct, relativeDays } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { DashboardConfig } from '@/types';
+import { CashFlowDashboardCard } from '@/features/finance/CashFlowPanel';
 
 export const BLOCKS: Array<{ id: string; label: string }> = [
   { id: 'finance', label: 'Финансы' },
+  { id: 'cashflow', label: 'Денежный прогноз' },
   { id: 'upcoming', label: 'Ближайшие платежи' },
   { id: 'debts', label: 'Долги' },
   { id: 'car', label: 'Авто' },
@@ -183,9 +185,10 @@ function DebtsBlock() {
 
 function CarBlock() {
   const o = useOverview();
-  const refuels = useRows('car_refuels').rows;
-  const expenses = useRows('car_expenses').rows;
-  const service = useRows('car_service').rows;
+  const carHistory = { from: addDaysISO(o.today, -90), to: o.today };
+  const refuels = useRows('car_refuels', { limit: 500 }).rows;
+  const expenses = useRows('car_expenses', carHistory).rows;
+  const service = useRows('car_service', carHistory).rows;
   const car = o.cars.find(c => c.is_current) ?? o.cars[0];
   if (!car)
     return (
@@ -351,6 +354,7 @@ function CommandsBlock() {
 
 const RENDER: Record<string, () => ReactNode> = {
   finance: () => <FinanceBlock />,
+  cashflow: () => <CashFlowDashboardCard />,
   upcoming: () => <UpcomingBlock />,
   debts: () => <DebtsBlock />,
   car: () => <CarBlock />,

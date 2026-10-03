@@ -42,7 +42,7 @@ vi.mock('@/lib/supabase', () => {
   const builder = (table: string) => {
     const result = () => ({ data: data[table] ?? [], error: null });
     const b: Record<string, unknown> = {};
-    for (const m of ['select', 'order', 'range', 'eq', 'neq', 'not', 'delete', 'insert', 'upsert', 'update', 'limit', 'in']) b[m] = () => b;
+    for (const m of ['select', 'order', 'range', 'eq', 'neq', 'not', 'gte', 'lte', 'delete', 'insert', 'upsert', 'update', 'limit', 'in']) b[m] = () => b;
     b.maybeSingle = () => Promise.resolve({ data: null, error: null });
     b.single = () => Promise.resolve({ data: { id: 'new' }, error: null });
     b.then = (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => Promise.resolve(result()).then(ok, bad);

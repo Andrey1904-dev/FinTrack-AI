@@ -2,7 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button, IconButton } from '@/components/ui/button';
 import { CheckRow, Field, Input, MoneyInput, Select, Textarea } from '@/components/ui/form';
-import { useSaveRow } from '@/data/hooks';
+import { useInvalidate, useSaveRow } from '@/data/hooks';
 import { useAuth } from '@/data/auth';
 import { useCurrentCar } from '@/features/cars/useCars';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +31,7 @@ export function ServiceForm({ initial, carId, onDone }: { initial?: CarService; 
   const [fieldError, setFieldError] = useState('');
   const { user } = useAuth();
   const save = useSaveRow('car_service');
+  const invalidate = useInvalidate();
   const { saving, error, run } = useSubmit('Не удалось сохранить запись обслуживания', 'Запись обслуживания сохранена', onDone);
 
   const clean = items.filter(i => num(i.amount) > 0).map(i => ({ name: i.name.trim() || (i.kind === 'labor' ? 'Работа' : 'Запчасть'), amount: num(i.amount), kind: i.kind }));
@@ -64,6 +65,7 @@ export function ServiceForm({ initial, carId, onDone }: { initial?: CarService; 
       if (selected && num(mileage) > selected.mileage) {
         await supabase.from('cars').update({ mileage: Math.round(num(mileage)) }).eq('id', selected.id);
       }
+      await invalidate('cars', 'finance_operations');
     });
   };
 
