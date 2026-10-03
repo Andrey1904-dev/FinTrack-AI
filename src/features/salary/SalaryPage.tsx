@@ -87,7 +87,8 @@ export default function SalaryPage() {
 
       toast.success(`Зарплата ${money(amt)} подтверждена и внесена в Финансы!`);
       setPayoutToConfirm(null);
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       toast.error('Не удалось подтвердить получение выплаты');
     } finally {
       setConfirming(false);

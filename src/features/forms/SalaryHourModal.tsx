@@ -77,7 +77,8 @@ export function SalaryHourModal({ onDone, initialHours = 8, initialDate = todayI
       });
       toast.success(`Часы сохранены: ${fmtDateLong(date)} · ${money(preview?.earned ?? 0)}`);
       onDone();
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       toast.error('Не удалось сохранить часы');
     }
   };

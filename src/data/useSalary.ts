@@ -31,7 +31,7 @@ export function useSalaryProfiles() {
         }
       })();
     }
-  }, [profilesQuery.isLoading, profilesQuery.rows.length, user]);
+  }, [profilesQuery.isLoading, profilesQuery.rows.length, user, saveProfile]);
 
   return {
     profiles: profilesQuery.rows,

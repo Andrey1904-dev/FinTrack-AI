@@ -86,7 +86,8 @@ export function SalaryCalendarTab({ profile, summary, workDays, rates, onSaveWor
       });
       toast.success(`Сохранено: ${selectedDay.date} · ${money(preview?.earned ?? 0)}`);
       setSelectedDay(null);
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       toast.error('Ошибка при сохранении смены');
     } finally {
       setSaving(false);
@@ -134,7 +135,7 @@ export function SalaryCalendarTab({ profile, summary, workDays, rates, onSaveWor
             const isPlanned = d.isWorkScheduled && !isWorked && d.status !== 'day_off' && d.status !== 'sick' && d.status !== 'vacation';
             const isOff = !d.isWorkScheduled || d.status === 'day_off' || d.status === 'vacation' || d.status === 'sick';
 
-            let borderClass = 'border-line';
+            const borderClass = 'border-line';
             let bgClass = 'bg-panel/40';
 
             if (d.status === 'sick') {

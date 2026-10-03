@@ -88,10 +88,19 @@ alter table public.salary_work_days enable row level security;
 alter table public.salary_payments enable row level security;
 alter table public.salary_goals enable row level security;
 
+drop policy if exists "salary_profiles_own" on public.salary_profiles;
 create policy "salary_profiles_own" on public.salary_profiles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "salary_rates_own" on public.salary_rates;
 create policy "salary_rates_own" on public.salary_rates for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "salary_work_days_own" on public.salary_work_days;
 create policy "salary_work_days_own" on public.salary_work_days for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "salary_payments_own" on public.salary_payments;
 create policy "salary_payments_own" on public.salary_payments for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "salary_goals_own" on public.salary_goals;
 create policy "salary_goals_own" on public.salary_goals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- touch_updated_at triggers

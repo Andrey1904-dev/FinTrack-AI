@@ -125,7 +125,8 @@ export function SalarySettingsTab({ profiles, onSaveProfile, onDeleteProfile }: 
 
       await onSaveProfile(payload);
       toast.success('Настройки профиля сохранены');
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       toast.error('Не удалось сохранить настройки профиля');
     } finally {
       setSaving(false);
@@ -141,7 +142,8 @@ export function SalarySettingsTab({ profiles, onSaveProfile, onDeleteProfile }: 
       if (profiles.length > 1) {
         selectProfile(profiles.find(p => p.id !== selectedId) || profiles[0]);
       }
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       toast.error('Не удалось удалить профиль');
     }
   };
