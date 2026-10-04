@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Chips, Field, Input, MoneyInput, Segmented, Select } from '@/components/ui/form';
 import { useCategoryOptions } from '@/data/categories';
 import { useSaveRow } from '@/data/hooks';
-import { parseQuickEntry } from '@/lib/calc';
+import { parseQuickEntry, parseSalaryQuickEntry } from '@/lib/calc';
 import { todayISO } from '@/lib/dates';
 import { num } from '@/lib/format';
 import { uid } from '@/lib/utils';
 import type { Operation } from '@/types';
 import { FormShell, useSubmit } from './shared';
+import { useQuick } from './QuickProvider';
+import { Button } from '@/components/ui/button';
 
 export function OperationForm({ type: initialType, initial, onDone }: { type: 'income' | 'expense'; initial?: Operation; onDone: () => void }) {
   const [type, setType] = useState<'income' | 'expense'>(initial?.type ?? initialType);
@@ -23,9 +25,13 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
   const save = useSaveRow('finance_operations');
   const noun = type === 'income' ? 'доход' : 'расход';
   const { saving, error, run } = useSubmit(`Не удалось сохранить ${noun}`, type === 'income' ? 'Доход сохранён' : 'Расход сохранён', onDone);
+  const quick = useQuick();
 
   const applySmart = (text: string) => {
     setSmart(text);
+    // First check salary parsing
+    const salaryParsed = parseSalaryQuickEntry(text);
+    if (salaryParsed) return; // handled via hint UI
     const parsed = parseQuickEntry(text);
     if (!parsed) return;
     setType(parsed.type);
@@ -34,6 +40,7 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
     setNote(parsed.note);
   };
   const parsed = smart ? parseQuickEntry(smart) : null;
+  const salaryParsed = smart ? parseSalaryQuickEntry(smart) : null;
 
   const submit = () => {
     const value = num(amount);
@@ -74,15 +81,31 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
           <Field
             label="Умный ввод"
             hint={
-              parsed
-                ? `Распознано: ${parsed.type === 'income' ? 'доход' : 'расход'} ${parsed.amount} ₽ · ${parsed.category} · раздел «${parsed.section}». Проверьте поля ниже и сохраните.`
-                : 'Например: +1200 бензин — поля заполнятся сами'
+              salaryParsed
+                ? `Распознано как зарплата: ${salaryParsed.type === 'salary_hours' ? `${salaryParsed.hours} ч` : `${salaryParsed.cases} чехлов`} на ${salaryParsed.date}. Нажмите кнопку ниже, чтобы внести рабочие часы.`
+                : parsed
+                  ? `Распознано: ${parsed.type === 'income' ? 'доход' : 'расход'} ${parsed.amount} ₽ · ${parsed.category} · раздел «${parsed.section}». Проверьте поля ниже и сохраните.`
+                  : 'Например: +1200 бензин — поля заполнятся сами. Также понимает: «Отработал сегодня 8 часов», «350 чехлов»'
             }
           >
             {id => (
-              <div className="relative">
-                <Sparkles size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
-                <Input id={id} value={smart} onChange={e => applySmart(e.target.value)} placeholder="+1200 бензин" className="pl-9" autoComplete="off" />
+              <div className="space-y-2">
+                <div className="relative">
+                  <Sparkles size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
+                  <Input id={id} value={smart} onChange={e => applySmart(e.target.value)} placeholder="+1200 бензин или отработал 8 часов" className="pl-9" autoComplete="off" />
+                </div>
+                {salaryParsed && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => {
+                      quick.open('salary_hours', { hours: salaryParsed.hours, date: salaryParsed.date });
+                      onDone();
+                    }}
+                  >
+                    Внести {salaryParsed.hours ? `${salaryParsed.hours} ч` : `${salaryParsed.cases} чехлов`} в зарплату
+                  </Button>
+                )}
               </div>
             )}
           </Field>

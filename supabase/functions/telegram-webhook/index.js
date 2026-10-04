@@ -363,17 +363,22 @@ async function sendSalary(db, io, userId, prefs) {
   const today = localParts(prefs.timezone).date;
   const month = today.slice(0, 7);
 
-  // Load profiles and work days
+  // Load profiles, work days, payments
   const profilesRes = await db.from('salary_profiles').select('*').eq('user_id', userId).eq('active', true);
   const profiles = profilesRes.data || [];
 
   const workDaysRes = await db.from('salary_work_days').select('*').eq('user_id', userId).gte('date', `${month}-01`).lte('date', `${month}-31`);
   const workDays = workDaysRes.data || [];
 
+  const paymentsRes = await db.from('salary_payments').select('*').eq('user_id', userId).gte('payment_date', today).eq('status', 'expected').order('payment_date', { ascending: true }).limit(3);
+  const upcomingPayments = paymentsRes.data || [];
+
   let myEarned = 0;
   let myForecast = 0;
   let girlEarned = 0;
   let girlForecast = 0;
+  let myHours = 0;
+  let girlShifts = 0;
 
   for (const p of profiles) {
     const isMe = p.schedule_type === '5/2' || p.name.toLowerCase().includes('моя');
@@ -381,7 +386,7 @@ async function sendSalary(db, io, userId, prefs) {
 
     const profileDays = workDays.filter(d => d.salary_profile_id === p.id);
     const earned = profileDays.reduce((sum, d) => sum + Number(d.earned_amount || 0), 0);
-    // Baseline remaining days
+    const hours = profileDays.reduce((sum, d) => sum + Number(d.actual_hours || 0), 0);
     const workedCount = profileDays.filter(d => d.status === 'worked' || d.earned_amount > 0).length;
     const totalScheduled = p.schedule_type === '5/2' ? 22 : 15;
     const remainingCount = Math.max(0, totalScheduled - workedCount);
@@ -391,9 +396,15 @@ async function sendSalary(db, io, userId, prefs) {
     if (isMe) {
       myEarned = earned;
       myForecast = forecast;
+      myHours = hours;
     } else if (isGirl) {
       girlEarned = earned;
       girlForecast = forecast;
+      girlShifts = workedCount;
+    } else {
+      // For other profiles, add to family forecast
+      myForecast += forecast;
+      myEarned += earned;
     }
   }
 
@@ -403,15 +414,49 @@ async function sendSalary(db, io, userId, prefs) {
     myForecast = 88384;
     girlEarned = 42350;
     girlForecast = 72450;
+    myHours = 149;
+    girlShifts = 12;
   }
 
   const familyForecast = myForecast + girlForecast;
+  const familyEarned = myEarned + girlEarned;
+  const deviation = familyForecast - familyEarned;
+
+  let nextPayout = null;
+  if (upcomingPayments.length > 0) {
+    const np = upcomingPayments[0];
+    const days = Math.round((new Date(np.payment_date + 'T12:00:00Z').getTime() - new Date(today + 'T12:00:00Z').getTime()) / 86400000);
+    nextPayout = { date: np.payment_date, days: days >= 0 ? days : 0 };
+  } else if (profiles.length > 0) {
+    // Fallback: calculate from settings
+    const p = profiles[0];
+    const advDay = p.settings?.advance_day || 25;
+    const salDay = p.settings?.salary_day || 10;
+    const curMonth = month;
+    const nextMonth = (() => {
+      const [y, m] = curMonth.split('-').map(Number);
+      const d = new Date(Date.UTC(y, m, 1));
+      d.setUTCMonth(d.getUTCMonth() + 1);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    })();
+    const candidates = [
+      `${curMonth}-${String(advDay).padStart(2, '0')}`,
+      `${curMonth}-${String(salDay).padStart(2, '0')}`,
+      `${nextMonth}-${String(salDay).padStart(2, '0')}`,
+    ].filter(d => d >= today).sort();
+    if (candidates[0]) {
+      const days = Math.round((new Date(candidates[0] + 'T12:00:00Z').getTime() - new Date(today + 'T12:00:00Z').getTime()) / 86400000);
+      nextPayout = { date: candidates[0], days: days >= 0 ? days : 0 };
+    }
+  }
+
   const keyboard = inlineKeyboard([
     [{ text: '+8 часов сегодня', callback_data: 'salary:quick:8' }, { text: '+4 часа', callback_data: 'salary:quick:4' }],
+    [{ text: '📊 Открыть календарь', callback_data: 'menu:month' }],
     HOME_ROW,
   ]);
 
-  return respond(io, renderSalarySummary({ myEarned, myForecast, girlEarned, girlForecast, familyForecast }), keyboard);
+  return respond(io, renderSalarySummary({ myEarned, myForecast, girlEarned, girlForecast, familyForecast, myHours, girlShifts, deviation, nextPayout }), keyboard);
 }
 
 async function sendGoals(db, io, userId) {

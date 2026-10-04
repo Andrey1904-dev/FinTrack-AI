@@ -3,14 +3,46 @@ import { Button } from '@/components/ui/button';
 import { Panel, PanelLink } from '@/components/ui/misc';
 import { useSalaryData } from '@/data/useSalary';
 import { useQuick } from '@/features/forms/QuickProvider';
-import { daysBetween, todayISO } from '@/lib/dates';
-import { money } from '@/lib/format';
+import { daysBetween, monthKey, shiftMonthKey, todayISO } from '@/lib/dates';
+import { money, plural } from '@/lib/format';
+
+function nextPayoutDate(profile: { settings: Record<string, unknown> }, today: string): string | null {
+  const advDay = Number((profile.settings as { advance_day?: number })?.advance_day ?? 25);
+  const salDay = Number((profile.settings as { salary_day?: number })?.salary_day ?? 10);
+  if (!Number.isFinite(advDay) || !Number.isFinite(salDay)) return null;
+
+  const curMonth = monthKey(today);
+  const nextMonth = shiftMonthKey(curMonth, 1);
+
+  // Build candidate dates: advance in current month, salary in next month, plus also salary in current month (if day >= today)
+  const candidates: string[] = [];
+
+  // Advance current month
+  const advThisMonth = `${curMonth}-${String(advDay).padStart(2, '0')}`;
+  candidates.push(advThisMonth);
+
+  // Salary current month (for profiles where salary_day is in same month, e.g. 8th for previous period but we show as upcoming)
+  const salThisMonth = `${curMonth}-${String(salDay).padStart(2, '0')}`;
+  candidates.push(salThisMonth);
+
+  // Salary next month
+  const salNextMonth = `${nextMonth}-${String(salDay).padStart(2, '0')}`;
+  candidates.push(salNextMonth);
+
+  // Advance next month
+  const advNextMonth = `${nextMonth}-${String(advDay).padStart(2, '0')}`;
+  candidates.push(advNextMonth);
+
+  // Filter >= today and sort
+  const future = candidates.filter(d => d >= today).sort();
+  return future[0] || null;
+}
 
 export function SalaryDashboardCard() {
   const quick = useQuick();
   const today = todayISO();
   const currentMonth = today.slice(0, 7);
-  const { profiles, profileSummaries, familySummary } = useSalaryData(currentMonth);
+  const { profiles, profileSummaries, familySummary, payments } = useSalaryData(currentMonth);
 
   const myProfile = profiles.find(p => p.name.toLowerCase().includes('моя') || p.schedule_type === '5/2');
   const girlProfile = profiles.find(p => p.name.toLowerCase().includes('девушк') || p.schedule_type === '2/2');
@@ -23,6 +55,30 @@ export function SalaryDashboardCard() {
   if (myProfile?.probation_end_date) {
     const diff = daysBetween(today, myProfile.probation_end_date);
     if (diff > 0) probationDaysLeft = diff;
+  }
+
+  // Days until next salary payout (family)
+  let nextPayout: { date: string; days: number; profileName: string } | null = null;
+  for (const p of profiles) {
+    if (!p.active) continue;
+    const d = nextPayoutDate(p, today);
+    if (!d) continue;
+    const diff = daysBetween(today, d);
+    if (diff < 0) continue;
+    if (!nextPayout || diff < nextPayout.days) {
+      nextPayout = { date: d, days: diff, profileName: p.name };
+    }
+  }
+
+  // Also consider explicit expected payments that are sooner
+  const expectedPayments = payments.filter(pm => pm.status === 'expected' && pm.payment_date >= today).sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+  if (expectedPayments.length > 0) {
+    const soonest = expectedPayments[0];
+    const diff = daysBetween(today, soonest.payment_date);
+    if (!nextPayout || diff < nextPayout.days) {
+      const prof = profiles.find(pr => pr.id === soonest.salary_profile_id);
+      nextPayout = { date: soonest.payment_date, days: diff, profileName: prof?.name ?? 'Зарплата' };
+    }
   }
 
   return (
@@ -76,9 +132,24 @@ export function SalaryDashboardCard() {
 
         {/* Total Family Forecast row */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-          <div>
+          <div className="space-y-1">
             <span className="silk block text-mute">Прогноз дохода семьи на месяц:</span>
-            <span className="tnum text-[18px] font-semibold text-txt">{money(familySummary.forecast)}</span>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span className="tnum text-[18px] font-semibold text-txt">{money(familySummary.forecast)}</span>
+              <span className="tnum text-[12px] text-mute">
+                {money(familySummary.earnedSoFar)} / {money(familySummary.forecast)} · факт/план
+              </span>
+            </div>
+            {nextPayout && (
+              <p className="text-[11.5px] text-amber">
+                💸 До зарплаты: {nextPayout.days === 0 ? 'сегодня' : `${nextPayout.days} ${plural(nextPayout.days, ['день', 'дня', 'дней'])}`} ({nextPayout.date} · {nextPayout.profileName})
+              </p>
+            )}
+            {familySummary.forecast > 0 && familySummary.earnedSoFar < familySummary.forecast && (
+              <p className="text-[11px] text-mute">
+                Отклонение: {money(familySummary.forecast - familySummary.earnedSoFar)} осталось заработать
+              </p>
+            )}
           </div>
 
           <Button variant="outline" size="sm" onClick={() => quick.open('salary_hours')}>

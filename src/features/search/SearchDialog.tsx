@@ -5,10 +5,11 @@ import { Modal } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/form';
 import { PageHeader, Panel } from '@/components/ui/misc';
 import { useRows } from '@/data/hooks';
-import { useSalaryProfiles } from '@/data/useSalary';
+import { useSalaryData, useSalaryProfiles } from '@/data/useSalary';
 import { parseSalaryQuickEntry } from '@/lib/calc/parse';
 import { fmtDate, money } from '@/lib/format';
 import { useQuick } from '@/features/forms/QuickProvider';
+import { todayISO, monthKey } from '@/lib/dates';
 
 interface Hit {
   id: string;
@@ -34,6 +35,9 @@ function useSearchHits(query: string): Hit[] {
   const commands = useRows('commands').rows;
   const salaryWorkDays = useRows('salary_work_days').rows;
   const { profiles } = useSalaryProfiles();
+  const today = todayISO();
+  const currentMonth = monthKey(today);
+  const { familySummary } = useSalaryData(currentMonth);
   const deferred = useDeferredValue(query);
 
   return useMemo(() => {
@@ -42,6 +46,26 @@ function useSearchHits(query: string): Hit[] {
     const has = (...v: Array<string | number | null | undefined>) =>
       v.some(x => x !== null && x !== undefined && String(x).toLowerCase().includes(q));
     const hits: Hit[] = [];
+
+    // Salary AI-like queries: "сколько я заработал", "зарплата", "доход"
+    if (q.includes('сколько') && (q.includes('заработал') || q.includes('доход') || q.includes('зарплат'))) {
+      hits.push({
+        id: 'salary-summary-query',
+        group: 'Зарплаты',
+        title: `💰 ${currentMonth} · План: ${money(familySummary.forecast)} · Факт: ${money(familySummary.earnedSoFar)}`,
+        sub: `Моя: ${money(familySummary.myForecast)} / ${money(familySummary.myEarned)} · Девушка: ${money(familySummary.girlForecast)} / ${money(familySummary.girlEarned)}`,
+        link: '/salary',
+      });
+    }
+    if (q.includes('до зарплаты') || q.includes('когда зарплата') || q.includes('ближайшая зарплата')) {
+      hits.push({
+        id: 'salary-next',
+        group: 'Зарплаты',
+        title: '📅 Ближайшая выплата зарплаты',
+        sub: 'Откройте календарь зарплат, чтобы увидеть даты аванса и получки',
+        link: '/salary',
+      });
+    }
 
     // Smart Input check for salary
     const salaryQuick = parseSalaryQuickEntry(q);
@@ -54,6 +78,15 @@ function useSearchHits(query: string): Hit[] {
           sub: 'Нажмите, чтобы открыть карточку подтверждения смены',
           link: '/salary',
           action: () => quick.open('salary_hours', { hours: salaryQuick.hours, date: salaryQuick.date }),
+        });
+      } else if (salaryQuick.type === 'salary_shift') {
+        hits.push({
+          id: 'quick-salary-shift',
+          group: 'Быстрое действие',
+          title: `📦 Записать ${salaryQuick.cases} чехлов (${fmtDate(salaryQuick.date)})`,
+          sub: 'Сдельная смена для профиля 2/2',
+          link: '/salary',
+          action: () => quick.open('salary_hours', { hours: 11, date: salaryQuick.date }),
         });
       }
     }
@@ -121,7 +154,7 @@ function useSearchHits(query: string): Hit[] {
     for (const c of commands)
       if (has(c.command, c.description, c.category)) hits.push({ id: c.id, group: 'Команды', title: c.command, sub: c.description, link: '/commands' });
     return hits;
-  }, [deferred, ops, debts, cars, service, expenses, notes, tasks, goals, commands, profiles, salaryWorkDays, quick]);
+  }, [deferred, ops, debts, cars, service, expenses, notes, tasks, goals, commands, profiles, salaryWorkDays, quick, familySummary, currentMonth]);
 }
 
 export function SearchPanel({ onNavigate, autoFocus }: { onNavigate: (link: string) => void; autoFocus?: boolean }) {

@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { useDeleteRow, useInvalidate, useRows } from '@/data/hooks';
 import { useQuick } from '@/features/forms/QuickProvider';
 import { balanceAfter, debtHistory, debtProgress, simulatePayoff, singleDebtProgress, totalDebt } from '@/lib/calc';
-import { fromISO, todayISO } from '@/lib/dates';
+import { fromISO, monthKey, todayISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { downloadCSV } from '@/lib/export';
 import { compactMoney, fmtDate, fmtDateLong, money, num, pct, plural, relativeDays } from '@/lib/format';
@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import type { Debt } from '@/types';
 import { DebtForm } from './DebtForm';
+import { useSalaryData } from '@/data/useSalary';
 
 type Tab = 'list' | 'history' | 'calc';
 const KIND = { loan: 'Кредит', card: 'Кредитка', other: 'Долг' } as const;
@@ -245,12 +246,20 @@ export default function DebtsPage() {
       { header: 'Статус', value: d => d.status },
     ]);
 
-  const loading = debts.isLoading || payments.isLoading;
-  const error = debts.error || payments.error;
+  const recurring = useRows('recurring_payments');
+  const salaryMonth = monthKey(today);
+  const { familySummary } = useSalaryData(salaryMonth);
+
+  const loading = debts.isLoading || payments.isLoading || recurring.isLoading;
+  const error = debts.error || payments.error || recurring.error;
   const monthlyMin = active.reduce((s, d) => s + d.min_payment, 0);
   const remainingTotal = debts.rows.reduce((s, d) => s + d.balance, 0);
   const originalTotal = debts.rows.reduce((s, d) => s + Math.max(d.original_amount, d.balance), 0);
   const paid = Math.max(0, originalTotal - remainingTotal);
+
+  const expectedIncome = familySummary.forecast > 0 ? familySummary.forecast : recurring.rows.filter(r => r.active && r.kind === 'income').reduce((s, r) => s + r.amount, 0);
+  const mandatoryExpenses = recurring.rows.filter(r => r.active && r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
+  const freeAfterDebts = expectedIncome - mandatoryExpenses - monthlyMin;
 
   return (
     <div className="animate-fadein">
@@ -316,6 +325,13 @@ export default function DebtsPage() {
             <p className="silk mt-2.5">
               уплачено {money(paid)} · осталось {money(totalDebt(debts.rows))}
             </p>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 border-t border-line pt-4 sm:grid-cols-4">
+              <Stat label="Ожидаемый доход" value={money(expectedIncome)} tone="good" sub="зарплаты + доходы" />
+              <Stat label="Обязательные расходы" value={money(mandatoryExpenses)} tone="bad" sub="повторяющиеся" />
+              <Stat label="Долги в месяц" value={money(monthlyMin)} sub="минимум" />
+              <Stat label="Свободно после долгов" value={money(freeAfterDebts)} tone={freeAfterDebts >= 0 ? 'accent' : 'bad'} sub="доход − расходы − долги" />
+            </div>
           </section>
 
           <Tabs
