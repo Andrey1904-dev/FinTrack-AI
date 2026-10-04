@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { useDeleteRow, useInvalidate, useRows } from '@/data/hooks';
 import { useQuick } from '@/features/forms/QuickProvider';
 import { balanceAfter, debtHistory, debtProgress, simulatePayoff, singleDebtProgress, totalDebt } from '@/lib/calc';
-import { fromISO, monthKey, todayISO } from '@/lib/dates';
+import { fromISO, todayISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { downloadCSV } from '@/lib/export';
 import { compactMoney, fmtDate, fmtDateLong, money, num, pct, plural, relativeDays } from '@/lib/format';
@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import type { Debt } from '@/types';
 import { DebtForm } from './DebtForm';
-import { useSalaryData } from '@/data/useSalary';
+import { useSalarySummary } from '@/data/useSalary';
 
 type Tab = 'list' | 'history' | 'calc';
 const KIND = { loan: 'Кредит', card: 'Кредитка', other: 'Долг' } as const;
@@ -247,8 +247,7 @@ export default function DebtsPage() {
     ]);
 
   const recurring = useRows('recurring_payments');
-  const salaryMonth = monthKey(today);
-  const { familySummary } = useSalaryData(salaryMonth);
+  const { summary: salarySummary } = useSalarySummary();
 
   const loading = debts.isLoading || payments.isLoading || recurring.isLoading;
   const error = debts.error || payments.error || recurring.error;
@@ -257,7 +256,7 @@ export default function DebtsPage() {
   const originalTotal = debts.rows.reduce((s, d) => s + Math.max(d.original_amount, d.balance), 0);
   const paid = Math.max(0, originalTotal - remainingTotal);
 
-  const expectedIncome = familySummary.forecast > 0 ? familySummary.forecast : recurring.rows.filter(r => r.active && r.kind === 'income').reduce((s, r) => s + r.amount, 0);
+  const expectedIncome = salarySummary.totalForecast > 0 ? salarySummary.totalForecast : recurring.rows.filter(r => r.active && r.kind === 'income').reduce((s, r) => s + r.amount, 0);
   const mandatoryExpenses = recurring.rows.filter(r => r.active && r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
   const freeAfterDebts = expectedIncome - mandatoryExpenses - monthlyMin;
 

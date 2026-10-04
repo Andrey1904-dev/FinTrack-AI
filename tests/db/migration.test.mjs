@@ -51,8 +51,23 @@ await db.query(`insert into public.finance_operations(user_id, client_id, type, 
 // 3. Apply Personal OS migration (twice: it must be idempotent)
 await db.exec(sql('202610020001_personal_os.sql'));
 await db.exec(sql('202610020001_personal_os.sql'));
-for (const f of files.filter(f => f > '202610020001')) await db.exec(sql(f));
-// Additive trigger migrations must also be safe to reapply.
+// Stop right before the salary simplification to seed legacy salary data…
+for (const f of files.filter(f => f > '202610020001' && f < '202610040001')) await db.exec(sql(f));
+
+// Legacy salary module data: an hourly 5/2 profile (mine) and a manual 2/2 profile (girl's)
+const [myProfile] = (await db.query(
+  `insert into public.salary_profiles(user_id, name, schedule_type, payment_type, hours_per_day) values ($1, 'Моя зарплата', '5/2', 'hourly', 8) returning id`, [A])).rows;
+const [girlProfile] = (await db.query(
+  `insert into public.salary_profiles(user_id, name, schedule_type, payment_type, hours_per_day) values ($1, 'Зарплата девушки', '2/2', 'piecework', 11) returning id`, [A])).rows;
+await db.query(`insert into public.salary_work_days(user_id, salary_profile_id, date, status, earned_amount, note) values
+  ($1, $2, '2026-10-01', 'worked', 2415, 'смена'),
+  ($1, $2, '2026-10-03', 'worked', 3000.50, ''),
+  ($1, $2, '2026-10-05', 'planned', 2415, 'не отработано'),
+  ($1, $3, '2026-10-02', 'worked', 3976, 'авто-профиль: не копировать')`, [A, girlProfile.id, myProfile.id]);
+
+// …then apply the salary simplification (and everything after it)
+for (const f of files.filter(f => f >= '202610040001')) await db.exec(sql(f));
+// Additive migrations must also be safe to reapply.
 for (const f of files.filter(f => f > '202610020001')) await db.exec(sql(f));
 
 const q = async (text, params) => (await db.query(text, params)).rows;
@@ -91,10 +106,25 @@ assert.equal(profile.goals[0].name, 'Резерв');
 assert.equal(profile.goals[0].saved, 50000);
 assert.equal((await q(`select count(*)::int c from public.finance_operations where user_id = $1`, [A]))[0].c, 1, 'operations untouched');
 
+// --- salary: two modes, one entries table ---
+assert.equal((await q(`select mode from public.salary_profiles where id = $1`, [myProfile.id]))[0].mode, 'automatic', '5/2 hourly profile became «Заяц»');
+assert.equal((await q(`select mode from public.salary_profiles where id = $1`, [girlProfile.id]))[0].mode, 'manual', 'piecework profile became «Зайчик»');
+const migratedEntries = await q(`select * from public.salary_entries where user_id = $1 order by date`, [A]);
+assert.equal(migratedEntries.length, 2, 'only worked manual days became entries (no planned days, no automatic profile days)');
+assert.equal(Number(migratedEntries[0].amount), 2415);
+assert.equal(Number(migratedEntries[1].amount), 3000.5);
+assert.ok(migratedEntries.every(e => e.salary_profile_id === girlProfile.id), 'entries belong to the manual profile');
+for (const legacy of ['salary_rates', 'salary_work_days', 'salary_payments', 'salary_goals']) {
+  assert.equal((await q(`select count(*)::int c from information_schema.tables where table_schema = 'public' and table_name = $1`, [legacy]))[0].c, 0, `${legacy} dropped`);
+}
+await assert.rejects(() => db.query(`insert into public.salary_entries(user_id, salary_profile_id, date, amount) values ($1, $2, '2026-10-06', -1)`, [A, girlProfile.id]), /check constraint/, 'negative shift amounts are rejected');
+
 // --- RLS ---
 await asUser(B, async () => {
   assert.equal((await q(`select * from public.debts`)).length, 0, 'B cannot read A debts');
   assert.equal((await q(`select * from public.finance_operations`)).length, 0);
+  assert.equal((await q(`select * from public.salary_entries`)).length, 0, 'B cannot read A salary entries');
+  await assert.rejects(() => db.query(`insert into public.salary_entries(user_id, salary_profile_id, date, amount) values ($1, $2, '2026-10-07', 100)`, [A, girlProfile.id]), /row-level security/);
   await assert.rejects(() => db.query(`insert into public.tasks(user_id, title) values ($1, 'x')`, [A]), /row-level security/);
   await db.query(`insert into public.tasks(title) values ('mine')`); // user_id defaults to auth.uid()
   assert.equal((await q(`select * from public.tasks`)).length, 1);

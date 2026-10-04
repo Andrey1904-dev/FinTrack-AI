@@ -15,6 +15,22 @@ export function todayISO(now: Date = new Date()): string {
   return toISO(now);
 }
 
+/** The user's home timezone: salary math must not drift a day because of UTC. */
+export const HOME_TIMEZONE = 'Asia/Yekaterinburg';
+
+/**
+ * Today's calendar date in a specific IANA timezone as `YYYY-MM-DD`.
+ * Falls back to the device's local date when the timezone is unknown.
+ */
+export function todayISOInZone(timeZone: string = HOME_TIMEZONE, now: Date = new Date()): string {
+  try {
+    // en-CA formats as YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch {
+    return toISO(now);
+  }
+}
+
 export function isWeekend(iso: string): boolean {
   const d = fromISO(iso);
   const day = d.getDay();

@@ -10,14 +10,15 @@ import { useSaveRow } from '@/data/hooks';
 import { TaskForm } from '@/features/forms/TaskForm';
 import { useOverview } from '@/features/overview/useOverview';
 import { TaskRow } from '@/features/tasks/TasksPage';
-import { reminderState, isScheduledWorkDay, getRateForDate, calcDayEarnings } from '@/lib/calc';
+import { reminderState, isWorkDay5x2, sumMoney } from '@/lib/calc';
 import { CashFlowTodayBanner } from '@/features/finance/CashFlowPanel';
-import { addDaysISO, daysBetween, monthKey, todayISO } from '@/lib/dates';
+import { addDaysISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
-import { fmtDateLong, greeting, money, relativeDays } from '@/lib/format';
+import { fmtDateLong, greeting, money, plural, relativeDays } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/types';
-import { useSalaryData } from '@/data/useSalary';
+import { useSalarySummary } from '@/data/useSalary';
+import { useQuick } from '@/features/forms/QuickProvider';
 
 /** One briefing block: engineering code gutter + content. */
 function BriefingBlock({
@@ -51,128 +52,55 @@ function BriefingBlock({
 }
 
 function SalaryTodayBriefing() {
-  const today = todayISO();
-  const currentMonth = monthKey(today);
-  const { profiles, profileSummaries, workDays, rates, payments } = useSalaryData(currentMonth);
+  const quick = useQuick();
+  const { today, autoProfiles, autoSummaries, entries } = useSalarySummary();
 
-  const salaryToday = useMemo(() => {
-    const items: Array<{
-      profileName: string;
-      isWorkDay: boolean;
-      hours: number;
-      expectedEarn: number;
-      rate: number;
-      isProbation: boolean;
-      actual?: { hours: number; earned: number; status: string };
-      overtime?: number;
-    }> = [];
-
-    for (const p of profiles) {
-      if (!p.active) continue;
-      const isWork = isScheduledWorkDay(today, p);
-      const { rate, isProbation } = getRateForDate(today, p, rates);
-      const expected = isWork
-        ? calcDayEarnings(p, { date: today, actualHours: p.hours_per_day, status: 'worked' }, rates).earned
-        : 0;
-
-      const recorded = workDays.find(w => w.salary_profile_id === p.id && w.date === today);
-      const overtime = recorded && recorded.actual_hours > (p.hours_per_day || 8) ? recorded.actual_hours - (p.hours_per_day || 8) : 0;
-
-      items.push({
-        profileName: p.name,
-        isWorkDay: isWork,
-        hours: p.hours_per_day || 8,
-        expectedEarn: expected,
-        rate,
-        isProbation,
-        actual: recorded ? { hours: recorded.actual_hours, earned: recorded.earned_amount, status: recorded.status } : undefined,
-        overtime: overtime > 0 ? overtime : undefined,
-      });
+  const workToday = useMemo(() => {
+    const items: Array<{ name: string; amount: number; hours: number; rate: number; isProbation: boolean }> = [];
+    if (!isWorkDay5x2(today)) return items;
+    for (const p of autoProfiles) {
+      const day = autoSummaries.get(p.id)?.days.find(d => d.date === today);
+      if (day?.isWorkDay) items.push({ name: p.name, amount: day.amount, hours: day.hours, rate: day.rate, isProbation: day.isProbation });
     }
     return items;
-  }, [profiles, rates, workDays, today]);
+  }, [today, autoProfiles, autoSummaries]);
 
-  const nextPayout = useMemo(() => {
-    const allExpected = payments.filter(pm => pm.status === 'expected' && pm.payment_date >= today).sort((a, b) => a.payment_date.localeCompare(b.payment_date));
-    if (allExpected.length === 0) return null;
-    const next = allExpected[0];
-    const prof = profiles.find(pr => pr.id === next.salary_profile_id);
-    return { date: next.payment_date, amount: next.expected_amount, profileName: prof?.name ?? 'Зарплата', days: daysBetween(today, next.payment_date) };
-  }, [payments, profiles, today]);
+  const todayEntries = useMemo(() => entries.filter(e => e.date === today), [entries, today]);
+  const todayEntriesTotal = sumMoney(todayEntries.map(e => e.amount));
 
-  const monthEarned = useMemo(() => {
-    let earned = 0;
-    let forecast = 0;
-    for (const p of profiles) {
-      if (!p.active) continue;
-      const s = profileSummaries.get(p.id);
-      if (s) {
-        earned += s.totalEarnedSoFar;
-        forecast += s.monthTotalForecast;
-      }
-    }
-    return { earned, forecast };
-  }, [profiles, profileSummaries]);
-
-  if (profiles.length === 0) return null;
+  // Nothing extra when today is a regular day off with no shifts recorded.
+  if (workToday.length === 0 && todayEntries.length === 0) {
+    return <p className="text-[12px] text-mute">Сегодня выходной — отдыхайте. 🐰</p>;
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {salaryToday.map(item => (
-          <div key={item.profileName} className="rounded-[2px] border border-line bg-panel/50 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[12.5px] font-semibold text-txt">{item.profileName}</span>
-              <span className={`text-[10px] uppercase tracking-wider ${item.isWorkDay ? 'text-amber' : 'text-mute'}`}>
-                {item.isWorkDay ? 'Рабочий день' : 'Выходной'}
-              </span>
-            </div>
-            <div className="mt-2 space-y-1 text-[11.5px]">
-              <div className="flex justify-between">
-                <span className="text-mute">План часов:</span>
-                <span className="text-dim">{item.hours} ч</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-mute">Ставка:</span>
-                <span className="text-dim">
-                  {item.rate} ₽/ч {item.isProbation ? '(испытательный)' : ''}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-mute">Ожидаемо за день:</span>
-                <span className="font-semibold text-amber">{money(item.expectedEarn)}</span>
-              </div>
-              {item.actual && (
-                <div className="flex justify-between border-t border-line/60 pt-1">
-                  <span className="text-mute">Факт:</span>
-                  <span className="text-cyan">
-                    {item.actual.hours} ч · {money(item.actual.earned)} · {item.actual.status}
-                  </span>
-                </div>
-              )}
-              {item.overtime && item.overtime > 0 && (
-                <p className="text-cyan">⏱ Переработка: +{item.overtime} ч</p>
-              )}
-            </div>
+    <div className="space-y-2.5">
+      {workToday.map(item => (
+        <div key={item.name} className="flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-line bg-panel/50 px-3 py-2.5">
+          <div className="min-w-0">
+            <p className="text-[12.5px] font-semibold text-txt">Сегодня рабочий день</p>
+            <p className="silk text-mute">
+              🐰 Заяц · {item.hours} ч · {item.rate} ₽/ч{item.isProbation ? ' (испытательный)' : ''}
+            </p>
           </div>
-        ))}
-      </div>
+          <span className="tnum text-[15px] font-bold text-amber">{money(item.amount)}</span>
+        </div>
+      ))}
 
-      <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-line/60 pt-3 text-[11.5px]">
-        <span>
-          <span className="text-mute">Заработано в {currentMonth}:</span> <span className="font-semibold text-cyan">{money(monthEarned.earned)}</span>
-        </span>
-        <span>
-          <span className="text-mute">Прогноз месяца:</span> <span className="font-semibold text-txt">{money(monthEarned.forecast)}</span>
-        </span>
-        {nextPayout && (
-          <span>
-            <span className="text-mute">Ближайшая выплата:</span>{' '}
-            <span className="font-semibold text-amber">
-              {nextPayout.date} ({nextPayout.days === 0 ? 'сегодня' : `${nextPayout.days} дн.`}) · {money(nextPayout.amount)} · {nextPayout.profileName}
-            </span>
-          </span>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-line bg-panel/50 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-semibold text-txt">🐰 Зайчик</p>
+          {todayEntries.length > 0 ? (
+            <p className="silk text-cyan">
+              Сегодня записано: {money(todayEntriesTotal)} ({todayEntries.length} {plural(todayEntries.length, ['смена', 'смены', 'смен'])})
+            </p>
+          ) : (
+            <p className="silk text-mute">Смена ещё не записана</p>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => quick.open('salary_entry')}>
+          <Plus size={13} /> Добавить заработок
+        </Button>
       </div>
     </div>
   );

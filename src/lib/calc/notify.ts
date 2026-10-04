@@ -1,10 +1,10 @@
 import { daysBetween, todayISO } from '../dates';
 import { money, relativeDays } from '../format';
 import type { Car, CarReminder, Goal, Task } from '@/types';
-import type { SalaryPayment, SalaryProfile, SalaryRate, SalaryWorkDay } from '@/types/salary';
+import type { SalaryProfile } from '@/types/salary';
 import { reminderState } from './car';
 import type { CalendarEvent } from './events';
-import { calculateMonthSalary, isScheduledWorkDay } from './salary';
+import { DEFAULT_HOURLY_RATE, DEFAULT_PROBATION_RATE, isWorkDay5x2, sumMoney } from './salary';
 
 export interface Candidate {
   key: string;
@@ -32,29 +32,22 @@ export function buildCandidates(input: {
   goals: Goal[];
   tasks: Task[];
   salaryProfiles?: SalaryProfile[];
-  salaryWorkDays?: SalaryWorkDay[];
-  salaryRates?: SalaryRate[];
-  salaryPayments?: SalaryPayment[];
   today?: string;
 }): Candidate[] {
   const today = input.today ?? todayISO();
   const out: Candidate[] = [];
 
-  // Salary Probation & Workday reminders (TZ Section 38) + extended salary notifications
+  // «Заяц»: probation and workday reminders for automatic payroll profiles.
   if (input.salaryProfiles) {
-    const workDays = input.salaryWorkDays ?? [];
-    const payments = input.salaryPayments ?? [];
-    const rates = input.salaryRates ?? [];
-
     for (const p of input.salaryProfiles) {
-      if (!p.active) continue;
+      if (!p.active || p.mode !== 'automatic') continue;
 
       // Probation ending soon or ended
       if (p.probation_end_date) {
         const daysToProbation = daysBetween(today, p.probation_end_date);
-        const standardRate = p.settings.hourly_rate ?? 497;
-        const probationRate = p.settings.probation_rate ?? 442;
-        const dailyEarn = (p.hours_per_day || 8) * standardRate;
+        const standardRate = p.settings.hourly_rate ?? DEFAULT_HOURLY_RATE;
+        const probationRate = p.settings.probation_rate ?? DEFAULT_PROBATION_RATE;
+        const dailyEarn = sumMoney([(p.hours_per_day || 8) * standardRate]);
 
         if (daysToProbation > 0 && daysToProbation <= 7) {
           out.push({
@@ -77,21 +70,8 @@ export function buildCandidates(input: {
         }
       }
 
-      // Rate change today from salary_rates table
-      const rateToday = rates.find(r => r.salary_profile_id === p.id && r.valid_from === today);
-      if (rateToday) {
-        out.push({
-          key: `rate:changed:${p.id}:${today}`,
-          severity: 'info',
-          icon: '📈',
-          title: `Изменилась ставка · ${p.name}`,
-          body: `Новая ставка: ${rateToday.rate} ₽/${rateToday.rate_type === 'hourly' ? 'час' : 'смену'} с ${today}.`,
-          link: '/salary',
-        });
-      }
-
-      // Today workday plan
-      if (isScheduledWorkDay(today, p)) {
+      // Today is a scheduled 5/2 workday
+      if (isWorkDay5x2(today)) {
         out.push({
           key: `workday:today:${p.id}:${today}`,
           severity: 'info',
@@ -101,71 +81,6 @@ export function buildCandidates(input: {
           link: '/salary',
         });
       }
-
-      // Overtime detection: check last 3 days where actual > planned
-      const overtimeDays = workDays.filter(w => w.salary_profile_id === p.id && w.actual_hours > (w.planned_hours || p.hours_per_day || 8) + 0.1 && w.date <= today).slice(-3);
-      if (overtimeDays.length > 0) {
-        const last = overtimeDays[overtimeDays.length - 1];
-        const extra = last.actual_hours - (last.planned_hours || p.hours_per_day || 8);
-        out.push({
-          key: `overtime:${p.id}:${last.date}`,
-          severity: 'success',
-          icon: '⚡',
-          title: `Переработка · ${p.name}`,
-          body: `${last.date}: +${extra.toFixed(1)} ч сверх плана (${last.actual_hours} ч вместо ${last.planned_hours} ч)`,
-          link: '/salary',
-        });
-      }
-
-      // Salary below plan detection
-      const curMonth = today.slice(0, 7);
-      const summary = calculateMonthSalary(p, curMonth, workDays, rates, today);
-      if (summary.workedDaysCount > 0 && summary.totalEarnedSoFar < summary.monthTotalForecast * 0.7 && summary.remainingWorkDaysCount < 5) {
-        // Only warn near month end if earned is significantly below forecast
-        const deviation = summary.monthTotalForecast - summary.totalEarnedSoFar - summary.futureForecast;
-        if (deviation > 0) {
-          out.push({
-            key: `salary:below:${p.id}:${curMonth}`,
-            severity: 'warning',
-            icon: '📉',
-            title: `Зарплата ниже плана · ${p.name}`,
-            body: `Факт ${money(summary.totalEarnedSoFar)} / план ${money(summary.monthTotalForecast)} · отклонение ${money(summary.monthTotalForecast - (summary.totalEarnedSoFar + summary.futureForecast))}`,
-            link: '/salary',
-          });
-        }
-      }
-    }
-
-    // Approaching salary payouts (expected)
-    for (const pm of payments) {
-      if (pm.status !== 'expected') continue;
-      const d = daysBetween(today, pm.payment_date);
-      if (d < 0 || d > 3) continue;
-      const profile = input.salaryProfiles.find(pr => pr.id === pm.salary_profile_id);
-      const title = d === 0 ? `Выплата сегодня · ${profile?.name ?? 'Зарплата'}` : d === 1 ? `Зарплата завтра · ${profile?.name ?? 'Зарплата'}` : `Приближается зарплата · ${profile?.name ?? 'Зарплата'}`;
-      out.push({
-        key: `salary:upcoming:${pm.id}:${pm.payment_date}`,
-        severity: d === 0 ? 'success' : d === 1 ? 'warning' : 'info',
-        icon: '💰',
-        title,
-        body: `${money(pm.expected_amount)} · ${relativeDays(pm.payment_date, today)}`,
-        link: '/salary',
-      });
-    }
-
-    // Actual received today
-    for (const pm of payments) {
-      if (pm.status !== 'paid') continue;
-      if (pm.payment_date !== today) continue;
-      const profile = input.salaryProfiles.find(pr => pr.id === pm.salary_profile_id);
-      out.push({
-        key: `salary:paid:${pm.id}:${today}`,
-        severity: 'success',
-        icon: '✅',
-        title: `Зарплата получена · ${profile?.name ?? 'Зарплата'}`,
-        body: `${money(pm.actual_amount)} · проведено в Финансы`,
-        link: '/finance',
-      });
     }
   }
 

@@ -8,7 +8,7 @@ import { ErrorState, PageHeader, Panel, Progress, Readout, Skeleton, Stat } from
 import { codeFor } from '@/features/layout/nav';
 import { useToast } from '@/components/ui/toast';
 import { useDeleteRow, useRows, useSaveRow } from '@/data/hooks';
-import { useSalaryProfiles } from '@/data/useSalary';
+import { useSalarySummary } from '@/data/useSalary';
 import { calcWhatIf, defaultWhatIf, monthlyAverage, totalDebt } from '@/lib/calc';
 import { friendlyError } from '@/lib/errors';
 import { money, num, pct, plural } from '@/lib/format';
@@ -66,7 +66,7 @@ export default function WhatIfPage() {
   const debts = useRows('debts');
   const goals = useRows('financial_goals');
   const scenarios = useRows('car_scenarios');
-  const { profiles } = useSalaryProfiles();
+  const { summary: salarySummary } = useSalarySummary();
   const save = useSaveRow('car_scenarios');
   const del = useDeleteRow('car_scenarios');
   const confirm = useConfirm();
@@ -90,10 +90,11 @@ export default function WhatIfPage() {
     const payment = active.reduce((s, d) => s + d.min_payment, 0);
     const goalsSaved = goals.rows.reduce((s, g) => s + g.current_amount, 0);
 
-    // If salary profiles exist, derive baseline monthly income from them if operations history is small
+    // Salary is the data source: when the ledger is still empty, take the
+    // month forecast («Заяц» plan + «Зайчик» facts) as the baseline income.
     let baselineIncome = Math.round(avg.income);
-    if (baselineIncome <= 0 && profiles.length > 0) {
-      baselineIncome = 150000; // estimated combined family income
+    if (baselineIncome <= 0 && salarySummary.totalForecast > 0) {
+      baselineIncome = Math.round(salarySummary.totalForecast);
     }
 
     setDraft(d => ({

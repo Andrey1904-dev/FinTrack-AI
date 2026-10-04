@@ -4,14 +4,14 @@ import { DebtPaymentForm } from './DebtPaymentForm';
 import { NoteForm } from './NoteForm';
 import { OperationForm } from './OperationForm';
 import { RefuelForm } from './RefuelForm';
-import { SalaryHourModal } from './SalaryHourModal';
+import { SalaryEntryModal } from './SalaryEntryModal';
 import { ServiceForm } from './ServiceForm';
 import { TaskForm } from './TaskForm';
 
-export type QuickKind = 'expense' | 'income' | 'payment' | 'salary_hours' | 'refuel' | 'service' | 'task' | 'note';
+export type QuickKind = 'expense' | 'income' | 'payment' | 'salary_entry' | 'refuel' | 'service' | 'task' | 'note';
 
 export const QUICK_ACTIONS: Array<{ kind: QuickKind; label: string }> = [
-  { kind: 'salary_hours', label: 'Внести часы работы' },
+  { kind: 'salary_entry', label: 'Добавить заработок за смену' },
   { kind: 'expense', label: 'Добавить расход' },
   { kind: 'income', label: 'Добавить доход' },
   { kind: 'payment', label: 'Записать платёж' },
@@ -22,20 +22,20 @@ export const QUICK_ACTIONS: Array<{ kind: QuickKind; label: string }> = [
 ];
 
 const TITLES: Record<QuickKind, string> = {
-  salary_hours: 'Отработанные часы',
+  salary_entry: 'Заработок за смену',
   expense: 'Новый расход', income: 'Новый доход', payment: 'Платёж по долгу', refuel: 'Заправка',
   service: 'Обслуживание автомобиля', task: 'Новая задача', note: 'Новая заметка',
 };
 
 interface Ctx {
-  open: (kind: QuickKind, payload?: { debtId?: string; hours?: number; date?: string }) => void;
+  open: (kind: QuickKind, payload?: { debtId?: string; amount?: number; date?: string }) => void;
 }
 const QuickCtx = createContext<Ctx | null>(null);
 
 export function QuickProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ kind: QuickKind; debtId?: string; hours?: number; date?: string; n: number } | null>(null);
-  const open = useCallback((kind: QuickKind, payload?: { debtId?: string; hours?: number; date?: string }) => {
-    setState({ kind, debtId: payload?.debtId, hours: payload?.hours, date: payload?.date, n: Date.now() });
+  const [state, setState] = useState<{ kind: QuickKind; debtId?: string; amount?: number; date?: string; n: number } | null>(null);
+  const open = useCallback((kind: QuickKind, payload?: { debtId?: string; amount?: number; date?: string }) => {
+    setState({ kind, debtId: payload?.debtId, amount: payload?.amount, date: payload?.date, n: Date.now() });
   }, []);
   const close = useCallback(() => setState(null), []);
   const value = useMemo(() => ({ open }), [open]);
@@ -43,7 +43,7 @@ export function QuickProvider({ children }: { children: ReactNode }) {
     <QuickCtx.Provider value={value}>
       {children}
       <Modal open={!!state} onOpenChange={o => !o && close()} title={state ? TITLES[state.kind] : ''}>
-        {state?.kind === 'salary_hours' && <SalaryHourModal key={state.n} initialHours={state.hours ?? 8} initialDate={state.date} onDone={close} />}
+        {state?.kind === 'salary_entry' && <SalaryEntryModal key={state.n} initialAmount={state.amount} initialDate={state.date} onDone={close} />}
         {state?.kind === 'expense' && <OperationForm key={state.n} type="expense" onDone={close} />}
         {state?.kind === 'income' && <OperationForm key={state.n} type="income" onDone={close} />}
         {state?.kind === 'payment' && <DebtPaymentForm key={state.n} debtId={state.debtId} onDone={close} />}

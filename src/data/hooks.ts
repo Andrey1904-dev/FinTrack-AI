@@ -13,8 +13,7 @@ const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> 
   debt_payments: { column: 'paid_at', ascending: false },
   learning_topics: { column: 'position', ascending: true },
   learning_tracks: { column: 'position', ascending: true },
-  salary_work_days: { column: 'date', ascending: true },
-  salary_payments: { column: 'payment_date', ascending: true },
+  salary_entries: { column: 'date', ascending: false },
 };
 const DATE_COLUMN: Partial<Record<TableName, string>> = {
   finance_operations: 'date',
@@ -27,8 +26,7 @@ const DATE_COLUMN: Partial<Record<TableName, string>> = {
   financial_goals: 'deadline',
   tasks: 'due_date',
   notifications: 'due_date',
-  salary_work_days: 'date',
-  salary_payments: 'payment_date',
+  salary_entries: 'date',
 };
 
 export interface RowWindow {

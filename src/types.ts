@@ -261,7 +261,7 @@ export interface FinanceProfile {
   categories: { expense?: string[]; income?: string[] };
 }
 
-import type { SalaryGoal, SalaryPayment, SalaryProfile, SalaryRate, SalaryWorkDay } from './types/salary';
+import type { SalaryEntry, SalaryProfile } from './types/salary';
 
 export type TableName =
   | 'finance_operations'
@@ -282,10 +282,7 @@ export type TableName =
   | 'commands'
   | 'notifications'
   | 'salary_profiles'
-  | 'salary_rates'
-  | 'salary_work_days'
-  | 'salary_payments'
-  | 'salary_goals';
+  | 'salary_entries';
 
 export interface TableMap {
   finance_operations: Operation;
@@ -306,8 +303,5 @@ export interface TableMap {
   commands: CommandRow;
   notifications: AppNotification;
   salary_profiles: SalaryProfile;
-  salary_rates: SalaryRate;
-  salary_work_days: SalaryWorkDay;
-  salary_payments: SalaryPayment;
-  salary_goals: SalaryGoal;
+  salary_entries: SalaryEntry;
 }
