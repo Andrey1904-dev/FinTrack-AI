@@ -1,4 +1,4 @@
-import { Bell, Bot, LogOut, ShieldAlert } from 'lucide-react';
+import { Bell, LogOut, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Switch } from '@/components/ui/form';
@@ -114,18 +114,10 @@ function BrowserNotifyCard() {
   );
 }
 
+import { SalaryAiCard } from '@/features/salary/SalaryAiCard';
+
 function AiCard() {
-  return (
-    <Panel label="AI-помощник" right={<span className="silk-b text-mute">скоро</span>}>
-      <div className="flex gap-3">
-        <Bot size={18} className="mt-0.5 shrink-0 text-mute" />
-        <p className="text-[12px] leading-relaxed text-dim">
-          Здесь появится помощник, который объяснит траты, предложит план погашения и ответит на вопросы по вашим данным. Он ничего не изменит
-          без вашего подтверждения. Уже сейчас работает умный ввод: напишите «+1200 бензин» в окне добавления расхода.
-        </p>
-      </div>
-    </Panel>
-  );
+  return <SalaryAiCard />;
 }
 
 function DangerZone() {

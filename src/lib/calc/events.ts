@@ -1,6 +1,8 @@
-import { addDaysISO, addMonthsISO, daysBetween, todayISO } from '../dates';
+import { addDaysISO, addMonthsISO, daysBetween, monthKey, shiftMonthKey, todayISO } from '../dates';
 import type { Car, CarReminder, Debt, Goal, RecurringPayment } from '@/types';
+import type { SalaryPayment, SalaryProfile, SalaryRate, SalaryWorkDay } from '@/types/salary';
 import { occurrencesBetween } from './recurring';
+import { calculateMonthSalary } from './salary';
 
 export type EventKind = 'income' | 'recurring' | 'debt' | 'car' | 'goal';
 
@@ -21,11 +23,86 @@ export interface EventSources {
   reminders: CarReminder[];
   cars: Car[];
   goals: Goal[];
+  salaryProfiles?: SalaryProfile[];
+  salaryWorkDays?: SalaryWorkDay[];
+  salaryRates?: SalaryRate[];
+  salaryPayments?: SalaryPayment[];
 }
 
 /** Everything financial that is planned between `from` and `to`: salaries, recurring payments, debt payments, dated car reminders, goal deadlines. */
 export function buildEvents(src: EventSources, from: string, to: string, today: string = todayISO()): CalendarEvent[] {
   const out: CalendarEvent[] = [];
+
+  // Salary payouts (from salary module)
+  if (src.salaryProfiles && src.salaryProfiles.length > 0) {
+    const profiles = src.salaryProfiles.filter(p => p.active);
+    const workDays = src.salaryWorkDays ?? [];
+    const rates = src.salaryRates ?? [];
+    const payments = src.salaryPayments ?? [];
+
+    for (const pm of payments) {
+      if (pm.status === 'expected' && ((pm.payment_date >= from && pm.payment_date <= to) || (pm.payment_date < today && from <= today))) {
+        const profile = profiles.find(p => p.id === pm.salary_profile_id);
+        const title = profile ? `📈 Доход · ${profile.name}` : '📈 Доход · Зарплата';
+        out.push({
+          id: `sp:${pm.id}`,
+          date: pm.payment_date,
+          title,
+          amount: pm.expected_amount,
+          kind: 'income',
+          overdue: pm.payment_date < today,
+          link: '/salary',
+        });
+      }
+    }
+
+    const currentMonth = monthKey(from < today ? from : today);
+    const endMonth = monthKey(to);
+    let m = currentMonth;
+    let guard = 0;
+    while (m <= endMonth && guard++ < 24) {
+      for (const profile of profiles) {
+        const summary = calculateMonthSalary(profile, m, workDays, rates, today);
+        const advDay = profile.settings.advance_day ?? 25;
+        const salDay = profile.settings.salary_day ?? 10;
+
+        const advDate = `${m}-${String(advDay).padStart(2, '0')}`;
+        const nextMonthKey = shiftMonthKey(m, 1);
+        const salDate = `${nextMonthKey}-${String(salDay).padStart(2, '0')}`;
+
+        const hasAdvPayment = payments.some(p => p.salary_profile_id === profile.id && p.payment_date === advDate);
+        const hasSalPayment = payments.some(p => p.salary_profile_id === profile.id && p.payment_date === salDate);
+
+        const totalForecast = summary.monthTotalForecast;
+        if (totalForecast > 0) {
+          const half = Math.round(totalForecast / 2);
+          if (!hasAdvPayment && ((advDate >= from && advDate <= to) || (advDate < today && from <= today))) {
+            out.push({
+              id: `sp-proj:${profile.id}:${advDate}`,
+              date: advDate,
+              title: `📈 Доход · Аванс (${profile.name})`,
+              amount: half,
+              kind: 'income',
+              overdue: advDate < today,
+              link: '/salary',
+            });
+          }
+          if (!hasSalPayment && ((salDate >= from && salDate <= to) || (salDate < today && from <= today))) {
+            out.push({
+              id: `sp-proj:${profile.id}:${salDate}`,
+              date: salDate,
+              title: `📈 Доход · ${profile.name}`,
+              amount: totalForecast - half,
+              kind: 'income',
+              overdue: salDate < today,
+              link: '/salary',
+            });
+          }
+        }
+      }
+      m = shiftMonthKey(m, 1);
+    }
+  }
 
   for (const p of src.recurring) {
     for (const o of occurrencesBetween(p, from, to, today)) {

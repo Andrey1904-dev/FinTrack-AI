@@ -7,6 +7,7 @@ import { Badge, EmptyState, ErrorState, PageHeader, Panel, Progress, Readout, Sk
 import { codeFor } from '@/features/layout/nav';
 import { useToast } from '@/components/ui/toast';
 import { useDeleteRow, useRows, useSaveRow } from '@/data/hooks';
+import { useSalaryData } from '@/data/useSalary';
 import { FormShell, useSubmit } from '@/features/forms/shared';
 import { GOAL_CATEGORIES } from '@/lib/constants';
 import { daysBetween, todayISO } from '@/lib/dates';
@@ -123,6 +124,13 @@ export default function GoalsPage() {
   const [add, setAdd] = useState<Goal | null>(null);
   const [filter, setFilter] = useState<'active' | 'done' | 'all'>('active');
   const today = todayISO();
+  const currentMonth = today.slice(0, 7);
+  const { familySummary } = useSalaryData(currentMonth);
+
+  // Estimated free cash after basic living (e.g. 20% of family monthly forecast can go to savings)
+  const estimatedMonthlySavingsPace = familySummary.forecast > 0
+    ? Math.round(familySummary.forecast * 0.2)
+    : 30000;
 
   const remove = async (g: Goal) => {
     if (!(await confirm({ title: 'Удалить цель?', text: g.title, confirmText: 'Удалить', danger: true }))) return;
@@ -259,9 +267,14 @@ export default function GoalsPage() {
                     </div>
 
                     {months !== null && left > 0 && (
-                      <p className="mt-2.5 border border-line bg-rail/40 px-3 py-2 text-[11.5px] text-dim">
-                        Чтобы успеть к сроку, откладывайте около <span className="tnum font-semibold text-txt">{money(left / months)}</span> в месяц.
-                      </p>
+                      <div className="mt-2.5 space-y-1.5 border border-line bg-rail/40 px-3 py-2 text-[11.5px] text-dim">
+                        <p>
+                          Чтобы успеть к сроку, откладывайте около <span className="tnum font-semibold text-txt">{money(left / months)}</span> в месяц.
+                        </p>
+                        <p className="silk text-mute">
+                          Прогноз накопления из зарплат (+{money(estimatedMonthlySavingsPace)}/мес): ориентировочный срок достижения ~{Math.ceil(left / Math.max(1, estimatedMonthlySavingsPace))} мес.
+                        </p>
+                      </div>
                     )}
                     {g.comment && <p className="mt-2.5 text-[11.5px] leading-relaxed text-dim">{g.comment}</p>}
 

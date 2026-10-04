@@ -41,7 +41,8 @@ const plain = value => typeof value === 'string' ? value.replace(/[\u00a0\u202f]
 const R = Object.fromEntries(Object.entries(Render).map(([key, fn]) => [key, typeof fn === 'function' ? (...args) => plain(fn(...args)) : fn]));
 const {
   bar, percent, plural, statusIcon, categoryIcon, signed, relativeDay, totalsOf, renderReport, renderBudgets, renderGoals,
-  renderCredits, renderUpcoming, renderOperationCard, renderBudgetImpact, renderMenu, renderBudgetAlert, renderWeeklyDigest, renderCreditAlert
+  renderCredits, renderUpcoming, renderOperationCard, renderBudgetImpact, renderMenu, renderBudgetAlert, renderWeeklyDigest, renderCreditAlert,
+  renderSalarySummary, renderHourCard
 } = R;
 
 assert.equal(bar(0.5), '▰▰▰▰▰▱▱▱▱▱');
@@ -112,4 +113,15 @@ assert.match(renderCreditAlert({ name: 'Кредит', wording: 'скоро', am
 assert.match(renderWeeklyDigest({ from: '2026-09-21', to: '2026-09-27', rows }), /🥇[^\n]*Продукты/u);
 
 for (const text of [report, budgets, goals, credits, card]) assert.ok(text.length < 4096, 'message fits the Telegram limit');
+
+const salaryMsg = renderSalarySummary({ myEarned: 56576, myForecast: 88384, girlEarned: 42350, girlForecast: 72450, familyForecast: 160834 });
+assert.match(salaryMsg, /💰 <b>Зарплата<\/b>/u);
+assert.match(salaryMsg, /Моя:[\s\S]*56 576 ₽/u);
+assert.match(salaryMsg, /Девушка:[\s\S]*42 350 ₽/u);
+assert.match(salaryMsg, /Общий прогноз: <b>160 834 ₽<\/b>/u);
+
+const hourMsg = renderHourCard({ hours: 8, date: '2026-10-05', rate: 442, earned: 3536, profileName: 'Моя зарплата' });
+assert.match(hourMsg, /3 536 ₽/u);
+assert.match(hourMsg, /442 ₽\/час/u);
+
 console.log('Telegram parser/security/rendering checks passed.');

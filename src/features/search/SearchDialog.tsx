@@ -5,7 +5,10 @@ import { Modal } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/form';
 import { PageHeader, Panel } from '@/components/ui/misc';
 import { useRows } from '@/data/hooks';
+import { useSalaryProfiles } from '@/data/useSalary';
+import { parseSalaryQuickEntry } from '@/lib/calc/parse';
 import { fmtDate, money } from '@/lib/format';
+import { useQuick } from '@/features/forms/QuickProvider';
 
 interface Hit {
   id: string;
@@ -13,11 +16,13 @@ interface Hit {
   title: string;
   sub: string;
   link: string;
+  action?: () => void;
 }
 
-const GROUPS = ['Расходы', 'Доходы', 'Долги', 'Автомобили', 'Обслуживание авто', 'Заметки', 'Задачи', 'Цели', 'Команды'];
+const GROUPS = ['Быстрое действие', 'Зарплаты', 'Расходы', 'Доходы', 'Долги', 'Автомобили', 'Обслуживание авто', 'Заметки', 'Задачи', 'Цели', 'Команды'];
 
 function useSearchHits(query: string): Hit[] {
+  const quick = useQuick();
   const ops = useRows('finance_operations').rows;
   const debts = useRows('debts').rows;
   const cars = useRows('cars').rows;
@@ -27,6 +32,8 @@ function useSearchHits(query: string): Hit[] {
   const tasks = useRows('tasks').rows;
   const goals = useRows('financial_goals').rows;
   const commands = useRows('commands').rows;
+  const salaryWorkDays = useRows('salary_work_days').rows;
+  const { profiles } = useSalaryProfiles();
   const deferred = useDeferredValue(query);
 
   return useMemo(() => {
@@ -35,6 +42,46 @@ function useSearchHits(query: string): Hit[] {
     const has = (...v: Array<string | number | null | undefined>) =>
       v.some(x => x !== null && x !== undefined && String(x).toLowerCase().includes(q));
     const hits: Hit[] = [];
+
+    // Smart Input check for salary
+    const salaryQuick = parseSalaryQuickEntry(q);
+    if (salaryQuick) {
+      if (salaryQuick.type === 'salary_hours') {
+        hits.push({
+          id: 'quick-salary-hours',
+          group: 'Быстрое действие',
+          title: `⏱️ Записать ${salaryQuick.hours} ч (${fmtDate(salaryQuick.date)})`,
+          sub: 'Нажмите, чтобы открыть карточку подтверждения смены',
+          link: '/salary',
+          action: () => quick.open('salary_hours', { hours: salaryQuick.hours, date: salaryQuick.date }),
+        });
+      }
+    }
+
+    // Salary profiles and work days
+    for (const p of profiles) {
+      if (has(p.name, p.schedule_type, 'зарплата')) {
+        hits.push({
+          id: p.id,
+          group: 'Зарплаты',
+          title: `Профиль: ${p.name}`,
+          sub: `График ${p.schedule_type} · ${p.payment_type === 'hourly' ? 'Почасовая' : 'Сдельная'}`,
+          link: '/salary',
+        });
+      }
+    }
+    for (const d of salaryWorkDays.slice(0, 15)) {
+      if (has(d.note, d.date, d.earned_amount, d.status)) {
+        hits.push({
+          id: d.id,
+          group: 'Зарплаты',
+          title: `${fmtDate(d.date)}: ${d.actual_hours} ч · ${money(d.earned_amount)}`,
+          sub: `${d.status} ${d.note ? '· ' + d.note : ''}`,
+          link: '/salary',
+        });
+      }
+    }
+
     for (const o of ops)
       if (has(o.category, o.note, o.amount, fmtDate(o.date)))
         hits.push({
@@ -74,7 +121,7 @@ function useSearchHits(query: string): Hit[] {
     for (const c of commands)
       if (has(c.command, c.description, c.category)) hits.push({ id: c.id, group: 'Команды', title: c.command, sub: c.description, link: '/commands' });
     return hits;
-  }, [deferred, ops, debts, cars, service, expenses, notes, tasks, goals, commands]);
+  }, [deferred, ops, debts, cars, service, expenses, notes, tasks, goals, commands, profiles, salaryWorkDays, quick]);
 }
 
 export function SearchPanel({ onNavigate, autoFocus }: { onNavigate: (link: string) => void; autoFocus?: boolean }) {
@@ -118,7 +165,10 @@ export function SearchPanel({ onNavigate, autoFocus }: { onNavigate: (link: stri
                   <li key={h.id}>
                     <button
                       type="button"
-                      onClick={() => onNavigate(h.link)}
+                      onClick={() => {
+                        if (h.action) h.action();
+                        onNavigate(h.link);
+                      }}
                       className="flex min-h-[48px] w-full items-center gap-3 border-b border-line/50 px-2 py-2 text-left transition-colors hover:bg-white/[0.03]"
                     >
                       <span className="min-w-0 flex-1">

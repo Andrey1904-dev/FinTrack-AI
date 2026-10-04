@@ -34,6 +34,18 @@ const SEED: Record<string, unknown[]> = {
   learning_topics: [{ id: 'lt1', ...base, track_id: 'l1', title: 'Функции', done: false, position: 0, done_at: null }],
   notes: [{ id: 'n1', ...base, title: 'Идея', body: 'текст', tags: ['it'], pinned: true }],
   commands: [{ id: 'k1', ...base, command: 'git status', description: 'статус', category: 'git' }],
+  salary_profiles: [
+    { id: 'sp1', ...base, name: 'Моя работа', schedule_type: '5/2', payment_type: 'hourly', hours_per_day: 8, start_date: '2026-09-01', probation_end_date: '2026-10-01', active: true, settings: { hourly_rate: 497, probation_rate: 442 } },
+    { id: 'sp2', ...base, name: 'Зарплата девушки', schedule_type: '2/2', payment_type: 'piecework', hours_per_day: 11, start_date: '2026-01-01', probation_end_date: null, active: true, settings: { base_pay: 2415, holiday_pay: 4600, case_price: 7, piece_percent: 25 } },
+  ],
+  salary_rates: [],
+  salary_work_days: [
+    { id: 'sw1', ...base, salary_profile_id: 'sp1', date: day(0), planned_hours: 8, actual_hours: 8, status: 'worked', rate: 497, earned_amount: 3976, cases: 0, is_holiday: false, bonus: 0, note: '' }
+  ],
+  salary_payments: [
+    { id: 'spm1', ...base, salary_profile_id: 'sp1', period_start: day(-15), period_end: day(0), expected_amount: 50000, actual_amount: 0, payment_date: day(3), status: 'expected', operation_id: null }
+  ],
+  salary_goals: [],
 };
 let data: Record<string, unknown[]> = {};
 
@@ -68,7 +80,7 @@ vi.mock('@/lib/supabase', () => {
 });
 
 const ROUTES: Array<[string, RegExp]> = [
-  ['/', /./], ['/today', /^Сегодня$/], ['/finance', /^Финансы$/], ['/debts', /^Долги$/], ['/cars', /^Авто$/],
+  ['/', /./], ['/today', /^Сегодня$/], ['/finance', /^Финансы$/], ['/salary', /^Зарплата$/], ['/debts', /^Долги$/], ['/cars', /^Авто$/],
   ['/calc', /^Автокалькулятор$/], ['/whatif', /^What-if$/], ['/goals', /^Цели$/], ['/tasks', /^Задачи$/], ['/learning', /^Обучение$/],
   ['/notes', /^Заметки$/], ['/commands', /^Команды$/], ['/search', /^Поиск$/], ['/notifications', /^Уведомления$/], ['/settings', /^Настройки$/],
 ];
@@ -101,7 +113,10 @@ describe.each([['empty', {}], ['seeded', SEED]] as Array<[string, Record<string,
     it(path, async () => {
       data = seed;
       const errors: unknown[][] = [];
-      const spy = vi.spyOn(console, 'error').mockImplementation((...a) => { errors.push(a); });
+      const spy = vi.spyOn(console, 'error').mockImplementation((...a) => {
+        console.log('TEST ERROR LOG:', ...a);
+        errors.push(a);
+      });
       const el = await visit(path, re);
       spy.mockRestore();
       expect(el.textContent).not.toContain('Что-то пошло не так');
@@ -115,7 +130,7 @@ describe('interactions', () => {
   const click = async (n: Element) => { await act(async () => { n.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 40)); }); };
   const labels = (root: ParentNode, sel: string) => [...root.querySelectorAll(sel)].map(n => n.textContent?.trim() ?? '');
 
-  for (const [path, heading] of [['/finance', /^Финансы$/], ['/debts', /^Долги$/], ['/cars', /^Авто$/]] as Array<[string, RegExp]>) {
+  for (const [path, heading] of [['/finance', /^Финансы$/], ['/salary', /^Зарплата$/], ['/debts', /^Долги$/], ['/cars', /^Авто$/]] as Array<[string, RegExp]>) {
     it(`${path}: every tab opens without errors`, async () => {
       data = SEED;
       const errors: unknown[][] = [];

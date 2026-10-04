@@ -24,8 +24,16 @@ export function useNotifications() {
   const stored = useRows('notifications');
 
   const candidates = useMemo<Candidate[]>(
-    () => buildCandidates({ events: o.events, reminders: o.reminders, cars: o.cars, goals: o.goals, tasks: o.tasks, today: o.today }),
-    [o.events, o.reminders, o.cars, o.goals, o.tasks, o.today],
+    () => buildCandidates({
+      events: o.events,
+      reminders: o.reminders,
+      cars: o.cars,
+      goals: o.goals,
+      tasks: o.tasks,
+      salaryProfiles: o.salaryProfiles,
+      today: o.today
+    }),
+    [o.events, o.reminders, o.cars, o.goals, o.tasks, o.salaryProfiles, o.today],
   );
   const readKeys = useMemo(() => new Set(stored.rows.filter(r => r.read).map(r => r.dedupe_key)), [stored.rows]);
   const items = useMemo(() => candidates.map(c => ({ ...c, read: readKeys.has(c.key) })), [candidates, readKeys]);

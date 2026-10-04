@@ -8,6 +8,7 @@ import { ErrorState, PageHeader, Panel, Progress, Readout, Skeleton, Stat } from
 import { codeFor } from '@/features/layout/nav';
 import { useToast } from '@/components/ui/toast';
 import { useDeleteRow, useRows, useSaveRow } from '@/data/hooks';
+import { useSalaryProfiles } from '@/data/useSalary';
 import { calcWhatIf, defaultWhatIf, monthlyAverage, totalDebt } from '@/lib/calc';
 import { friendlyError } from '@/lib/errors';
 import { money, num, pct, plural } from '@/lib/format';
@@ -22,6 +23,15 @@ const GROUPS: Array<{ title: string; fields: Array<{ key: keyof WhatIfParams; la
       { key: 'income', label: 'Доход в месяц', suffix: '₽' },
       { key: 'livingExpenses', label: 'Обычные расходы в месяц', suffix: '₽', hint: 'без платежей по долгам' },
       { key: 'savings', label: 'Накопления', suffix: '₽' },
+    ],
+  },
+  {
+    title: 'Зарплатные сценарии',
+    fields: [
+      { key: 'missedWorkDays', label: 'Пропуск рабочих дней', suffix: 'дн.', hint: 'что если пропущу 2 дня' },
+      { key: 'workHoursPerDay', label: 'Часов в день (план 8)', suffix: 'ч', hint: 'что если работать по 9 часов' },
+      { key: 'hourlyRateOverride', label: 'Часовая ставка (база 497)', suffix: '₽', hint: 'что если ставка станет 550 ₽' },
+      { key: 'girlIncomeDelta', label: 'Изменение дохода девушки', suffix: '₽', hint: 'что если девушка заработает на 10 000 меньше' },
     ],
   },
   {
@@ -56,6 +66,7 @@ export default function WhatIfPage() {
   const debts = useRows('debts');
   const goals = useRows('financial_goals');
   const scenarios = useRows('car_scenarios');
+  const { profiles } = useSalaryProfiles();
   const save = useSaveRow('car_scenarios');
   const del = useDeleteRow('car_scenarios');
   const confirm = useConfirm();
@@ -78,14 +89,25 @@ export default function WhatIfPage() {
     const rate = total > 0 ? active.reduce((s, d) => s + d.interest_rate * d.balance, 0) / total : 0;
     const payment = active.reduce((s, d) => s + d.min_payment, 0);
     const goalsSaved = goals.rows.reduce((s, g) => s + g.current_amount, 0);
+
+    // If salary profiles exist, derive baseline monthly income from them if operations history is small
+    let baselineIncome = Math.round(avg.income);
+    if (baselineIncome <= 0 && profiles.length > 0) {
+      baselineIncome = 150000; // estimated combined family income
+    }
+
     setDraft(d => ({
       ...d,
-      income: asText(Math.round(avg.income)),
+      income: asText(baselineIncome),
       livingExpenses: asText(Math.max(0, Math.round(avg.expense - payment))),
       debtTotal: asText(Math.round(total)),
       debtPayment: asText(Math.round(payment)),
       debtRate: asText(Math.round(rate * 10) / 10),
       savings: asText(Math.round(goalsSaved)),
+      missedWorkDays: '0',
+      workHoursPerDay: '8',
+      hourlyRateOverride: '497',
+      girlIncomeDelta: '0',
     }));
     toast.success(
       avg.months
@@ -174,7 +196,14 @@ export default function WhatIfPage() {
                 <div className="panel px-4 py-3.5">
                   <p className="silk">Свободно после решений</p>
                   <Readout value={r.freeAfter} size="xl" sign={r.freeAfter < 0 ? '−' : '+'} tone={r.freeAfter < 0 ? 'red' : 'cyan'} className="mt-2" />
-                  <p className="mt-1 text-[11px] text-mute">сейчас свободно {money(r.freeBefore)} в месяц</p>
+                  <p className="mt-1 text-[11px] text-mute">
+                    доход по сценарию: {money(r.effectiveIncome)}
+                    {r.salaryAdjustment !== 0 && (
+                      <span className={r.salaryAdjustment > 0 ? ' text-cyan' : ' text-red'}>
+                        {' '}({r.salaryAdjustment > 0 ? `+${money(r.salaryAdjustment)}` : money(r.salaryAdjustment)})
+                      </span>
+                    )}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
