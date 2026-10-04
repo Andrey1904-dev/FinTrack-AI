@@ -19,10 +19,8 @@ export function useOverview() {
   const tracks = useRows('learning_tracks');
   const topics = useRows('learning_topics');
   const salaryProfiles = useRows('salary_profiles');
-  const salaryWorkDays = useRows('salary_work_days');
-  const salaryRates = useRows('salary_rates');
-  const salaryPayments = useRows('salary_payments');
-  const all = [ops, recurring, debts, cars, reminders, goals, tasks, tracks, topics, salaryProfiles, salaryWorkDays, salaryRates, salaryPayments];
+  const salaryEntries = useRows('salary_entries');
+  const all = [ops, recurring, debts, cars, reminders, goals, tasks, tracks, topics, salaryProfiles, salaryEntries];
   const loading = all.some(q => q.isLoading);
   const error = all.find(q => q.error)?.error ?? null;
 
@@ -35,9 +33,6 @@ export function useOverview() {
       cars: cars.rows,
       goals: goals.rows,
       salaryProfiles: salaryProfiles.rows,
-      salaryWorkDays: salaryWorkDays.rows,
-      salaryRates: salaryRates.rows,
-      salaryPayments: salaryPayments.rows,
     };
     const events: CalendarEvent[] = buildEvents(sources, today, addDaysISO(today, 31), today);
     const dueToday = tasks.rows.filter((t: Task) => t.status === 'todo' && t.due_date !== null && t.due_date <= today);
@@ -55,7 +50,7 @@ export function useOverview() {
     };
   }, [
     ops.rows, recurring.rows, debts.rows, cars.rows, reminders.rows, goals.rows, tasks.rows,
-    salaryProfiles.rows, salaryWorkDays.rows, salaryRates.rows, salaryPayments.rows, today
+    salaryProfiles.rows, today
   ]);
 
   const refetch = () => Promise.all(all.map(q => q.refetch()));
@@ -74,8 +69,6 @@ export function useOverview() {
     tracks: tracks.rows,
     topics: topics.rows,
     salaryProfiles: salaryProfiles.rows,
-    salaryWorkDays: salaryWorkDays.rows,
-    salaryRates: salaryRates.rows,
-    salaryPayments: salaryPayments.rows,
+    salaryEntries: salaryEntries.rows,
   };
 }

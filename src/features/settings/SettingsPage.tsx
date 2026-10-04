@@ -114,12 +114,6 @@ function BrowserNotifyCard() {
   );
 }
 
-import { SalaryAiCard } from '@/features/salary/SalaryAiCard';
-
-function AiCard() {
-  return <SalaryAiCard />;
-}
-
 function DangerZone() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -165,7 +159,6 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <ProfileCard />
           <BrowserNotifyCard />
-          <AiCard />
           <DangerZone />
         </div>
         <div className="space-y-4">

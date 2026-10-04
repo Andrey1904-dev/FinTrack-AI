@@ -31,12 +31,9 @@ export function useNotifications() {
       goals: o.goals,
       tasks: o.tasks,
       salaryProfiles: o.salaryProfiles,
-      salaryWorkDays: o.salaryWorkDays,
-      salaryRates: o.salaryRates,
-      salaryPayments: o.salaryPayments,
       today: o.today,
     }),
-    [o.events, o.reminders, o.cars, o.goals, o.tasks, o.salaryProfiles, o.salaryWorkDays, o.salaryRates, o.salaryPayments, o.today],
+    [o.events, o.reminders, o.cars, o.goals, o.tasks, o.salaryProfiles, o.today],
   );
   const readKeys = useMemo(() => new Set(stored.rows.filter(r => r.read).map(r => r.dedupe_key)), [stored.rows]);
   const items = useMemo(() => candidates.map(c => ({ ...c, read: readKeys.has(c.key) })), [candidates, readKeys]);

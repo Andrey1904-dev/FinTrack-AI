@@ -1,212 +1,241 @@
 import { describe, expect, it } from 'vitest';
 import {
-  calcDayEarnings,
-  calcPieceworkEarnings,
-  calcRateDifference,
-  calculateMonthSalary,
-  getRateForDate,
-  isScheduledWorkDay,
+  calcAutoMonth,
+  DEFAULT_AUTO_PROFILE,
+  entriesOfMonth,
+  hourlyRateOn,
+  isWorkDay5x2,
+  manualMonthGroups,
+  manualStats,
+  nextPlannedPayout,
+  sumMoney,
+  workDaysOfMonth,
 } from './salary';
-import type { SalaryProfile, SalaryWorkDay } from '@/types/salary';
+import type { SalaryEntry, SalaryProfile } from '@/types/salary';
 
-const myProfile: SalaryProfile = {
-  id: 'my-profile-1',
-  user_id: 'user-1',
-  name: 'Моя работа',
+const base = { user_id: 'u1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+
+/** «Заяц»: 5/2, 8 h, probation 442 ₽/h through 30 Sep 2026, then 497 ₽/h. */
+const auto: SalaryProfile = {
+  id: 'auto-1',
+  ...base,
+  name: 'Моя зарплата',
+  mode: 'automatic',
   schedule_type: '5/2',
-  payment_type: 'hourly',
   hours_per_day: 8,
   start_date: '2026-09-01',
   probation_end_date: '2026-09-30',
   active: true,
-  settings: {
-    hourly_rate: 497,
-    probation_rate: 442,
-    overtime_rate_multiplier: 1.0,
-    holiday_rate_multiplier: 1.0,
-  },
-  created_at: '2026-09-01T00:00:00Z',
-  updated_at: '2026-09-01T00:00:00Z',
+  settings: { hourly_rate: 497, probation_rate: 442, advance_day: 25, salary_day: 10 },
 };
 
-const girlProfile: SalaryProfile = {
-  id: 'girl-profile-1',
-  user_id: 'user-1',
+const manual: SalaryProfile = {
+  id: 'manual-1',
+  ...base,
   name: 'Зарплата девушки',
+  mode: 'manual',
   schedule_type: '2/2',
-  payment_type: 'piecework',
   hours_per_day: 11,
-  start_date: '2026-10-01',
+  start_date: '2026-01-01',
   probation_end_date: null,
   active: true,
-  settings: {
-    base_pay: 2415,
-    holiday_pay: 4600,
-    case_price: 7,
-    piece_percent: 25,
-    schedule_start: '2026-10-01',
-    monthly_goal: 60000,
-  },
-  created_at: '2026-10-01T00:00:00Z',
-  updated_at: '2026-10-01T00:00:00Z',
+  settings: {},
 };
 
-describe('Salary calculations', () => {
-  it('TZ Section 9: 8 hours during probation = 3536 ₽', () => {
-    // 8 * 442 = 3536
-    const res = calcDayEarnings(myProfile, {
-      date: '2026-09-15',
-      actualHours: 8,
-      status: 'worked',
+const entry = (id: string, date: string, amount: number, profile = manual.id, note = ''): SalaryEntry => ({
+  id,
+  ...base,
+  salary_profile_id: profile,
+  date,
+  amount,
+  note,
+});
+
+describe('Production calendar (5/2)', () => {
+  it('matches the official monthly workday counts for 2026 (ПП № 1466)', () => {
+    const official = [15, 19, 21, 22, 19, 21, 23, 21, 22, 22, 20, 22];
+    official.forEach((count, i) => {
+      const month = `2026-${String(i + 1).padStart(2, '0')}`;
+      expect(workDaysOfMonth(month).length, month).toBe(count);
     });
-    expect(res.rate).toBe(442);
-    expect(res.isProbation).toBe(true);
-    expect(res.earned).toBe(3536);
+    expect(official.reduce((a, b) => a + b, 0)).toBe(247);
   });
 
-  it('TZ Section 9: 8 hours after probation = 3976 ₽', () => {
-    // 8 * 497 = 3976
-    const res = calcDayEarnings(myProfile, {
-      date: '2026-10-05',
-      actualHours: 8,
-      status: 'worked',
+  it('matches the official monthly workday counts for 2025 (ПП № 1335)', () => {
+    const official = [17, 20, 21, 22, 18, 19, 23, 21, 22, 23, 19, 22];
+    official.forEach((count, i) => {
+      const month = `2025-${String(i + 1).padStart(2, '0')}`;
+      expect(workDaysOfMonth(month).length, month).toBe(count);
     });
-    expect(res.rate).toBe(497);
-    expect(res.isProbation).toBe(false);
-    expect(res.earned).toBe(3976);
+    expect(official.reduce((a, b) => a + b, 0)).toBe(247);
   });
 
-  it('TZ Section 7: automatic transition 442 -> 497 on probation_end_date', () => {
-    const before = getRateForDate('2026-09-30', myProfile);
-    expect(before.rate).toBe(442);
-    expect(before.isProbation).toBe(true);
-
-    const after = getRateForDate('2026-10-01', myProfile);
-    expect(after.rate).toBe(497);
-    expect(after.isProbation).toBe(false);
-  });
-
-  it('TZ Section 8: 5/2 schedule distinguishes weekdays and weekends', () => {
-    // 2026-10-05 is Monday -> work day
-    expect(isScheduledWorkDay('2026-10-05', myProfile)).toBe(true);
-    // 2026-10-09 is Friday -> work day
-    expect(isScheduledWorkDay('2026-10-09', myProfile)).toBe(true);
-    // 2026-10-10 is Saturday -> weekend
-    expect(isScheduledWorkDay('2026-10-10', myProfile)).toBe(false);
-    // 2026-10-11 is Sunday -> weekend
-    expect(isScheduledWorkDay('2026-10-11', myProfile)).toBe(false);
-  });
-
-  it('TZ Section 10: non-standard hours (e.g. 4 hours or 6 hours)', () => {
-    // 4 hours @ 442 = 1768
-    const r4 = calcDayEarnings(myProfile, {
-      date: '2026-09-10',
-      actualHours: 4,
-      status: 'worked',
+  it('matches the official monthly workday counts for 2027 (ПП № 1187)', () => {
+    const official = [15, 19, 22, 22, 19, 21, 22, 22, 22, 21, 20, 22];
+    official.forEach((count, i) => {
+      const month = `2027-${String(i + 1).padStart(2, '0')}`;
+      expect(workDaysOfMonth(month).length, month).toBe(count);
     });
-    expect(r4.earned).toBe(1768);
-
-    // 6 hours @ 442 = 2652
-    const r6 = calcDayEarnings(myProfile, {
-      date: '2026-09-10',
-      actualHours: 6,
-      status: 'worked',
-    });
-    expect(r6.earned).toBe(2652);
+    expect(official.reduce((a, b) => a + b, 0)).toBe(247);
   });
 
-  it('TZ Section 11: overtime (> 8h) with multiplier 1.0', () => {
-    // 10 hours @ 497 = 4970
-    const res = calcDayEarnings(myProfile, {
-      date: '2026-10-05',
-      actualHours: 10,
-      status: 'worked',
-    });
-    expect(res.earned).toBe(4970);
+  it('knows the New Year holidays and transferred days', () => {
+    expect(isWorkDay5x2('2026-01-01')).toBe(false); // holiday
+    expect(isWorkDay5x2('2026-01-09')).toBe(false); // transferred day off (Fri)
+    expect(isWorkDay5x2('2026-01-12')).toBe(true); // first working day of 2026
+    expect(isWorkDay5x2('2026-12-31')).toBe(false); // transferred from 4 Jan
+    expect(isWorkDay5x2('2026-03-09')).toBe(false); // 8 Mar (Sun) → Mon
+    expect(isWorkDay5x2('2026-05-11')).toBe(false); // 9 May (Sat) → Mon
+    expect(isWorkDay5x2('2025-11-01')).toBe(true); // working Saturday in 2025
+    expect(isWorkDay5x2('2027-02-20')).toBe(true); // working Saturday in 2027
+    expect(isWorkDay5x2('2027-02-22')).toBe(false); // transferred day off
   });
 
-  it('TZ Section 13: vacation / sick / skipped = 0 earned by hourly rate', () => {
-    const vac = calcDayEarnings(myProfile, {
-      date: '2026-10-05',
-      actualHours: 8,
-      status: 'vacation',
-    });
-    expect(vac.earned).toBe(0);
-
-    const sick = calcDayEarnings(myProfile, {
-      date: '2026-10-06',
-      actualHours: 8,
-      status: 'sick',
-    });
-    expect(sick.earned).toBe(0);
-
-    const skipped = calcDayEarnings(myProfile, {
-      date: '2026-10-07',
-      actualHours: 8,
-      status: 'skipped',
-    });
-    expect(skipped.earned).toBe(0);
+  it('is not the naive days/7×5 approximation', () => {
+    // Naive math would give January 2026 ≈ 21–22 workdays; the calendar says 15.
+    expect(workDaysOfMonth('2026-01').length).toBe(15);
   });
 
-  it('TZ Section 17: rate difference comparison', () => {
-    // Diff is 55 ₽/h, daily diff = 440 ₽
-    const diff = calcRateDifference(myProfile, '2026-10');
-    expect(diff.hourlyDiff).toBe(55);
-    expect(diff.dailyDiff).toBe(440);
-    expect(diff.monthWorkHours).toBeGreaterThan(0);
-    expect(diff.monthDiff).toBe(diff.monthWorkHours * 55);
+  it('falls back to weekends + fixed holidays for years without a decree', () => {
+    // 2030: 12 Jun 2030 is a Wednesday — holiday.
+    expect(isWorkDay5x2('2030-06-12')).toBe(false);
+    // An ordinary Wednesday stays working, an ordinary Saturday stays off.
+    expect(isWorkDay5x2('2030-06-19')).toBe(true);
+    expect(isWorkDay5x2('2030-06-15')).toBe(false);
+  });
+});
+
+describe('«Заяц» — automatic payroll', () => {
+  it('September 2026 is fully on probation: 22 days × 8 h × 442 ₽', () => {
+    const s = calcAutoMonth(auto, '2026-09', '2026-08-15');
+    expect(s.workDaysTotal).toBe(22);
+    expect(s.hoursTotal).toBe(176);
+    expect(s.planTotal).toBe(176 * 442); // 77 792
+    expect(s.earnedSoFar).toBe(0);
+    expect(s.days.every(d => !d.isWorkDay || d.isProbation)).toBe(true);
   });
 
-  it('TZ Section 3: girl piecework shift calculation from my-pay', () => {
-    // Regular shift: base 2415 + 400 cases * 7 * 0.25 (1.75) = 2415 + 700 = 3115
-    const reg = calcPieceworkEarnings(400, false, 0, girlProfile);
-    expect(reg.base).toBe(2415);
-    expect(reg.piece).toBe(700);
-    expect(reg.total).toBe(3115);
-
-    // Holiday shift: base 4600 + 400 cases * 1.75 = 5300
-    const hol = calcPieceworkEarnings(400, true, 0, girlProfile);
-    expect(hol.base).toBe(4600);
-    expect(hol.piece).toBe(700);
-    expect(hol.total).toBe(5300);
+  it('October 2026 is after probation: 22 days × 8 h × 497 ₽ = 87 472 ₽', () => {
+    const s = calcAutoMonth(auto, '2026-10', '2026-10-01');
+    expect(s.workDaysTotal).toBe(22);
+    expect(s.hoursTotal).toBe(176);
+    expect(s.planTotal).toBe(87472);
+    expect(s.dominantRate).toBe(497);
+    expect(s.days.every(d => !d.isProbation)).toBe(true);
   });
 
-  it('TZ Section 15: month forecast combining actual recorded days and planned days', () => {
-    const recordedDays: SalaryWorkDay[] = [
-      {
-        id: '1',
-        user_id: 'u1',
-        salary_profile_id: myProfile.id,
-        date: '2026-10-01',
-        planned_hours: 8,
-        actual_hours: 8,
-        status: 'worked',
-        rate: 497,
-        earned_amount: 3976,
-        note: '',
-        created_at: '',
-        updated_at: '',
-      },
-      {
-        id: '2',
-        user_id: 'u1',
-        salary_profile_id: myProfile.id,
-        date: '2026-10-02',
-        planned_hours: 8,
-        actual_hours: 6,
-        status: 'worked',
-        rate: 497,
-        earned_amount: 2982,
-        note: '',
-        created_at: '',
-        updated_at: '',
-      },
-    ];
+  it('probation boundary: 30 Sep is 442 ₽/h, 1 Oct is 497 ₽/h', () => {
+    expect(hourlyRateOn(auto, '2026-09-30')).toEqual({ rate: 442, isProbation: true });
+    expect(hourlyRateOn(auto, '2026-10-01')).toEqual({ rate: 497, isProbation: false });
+  });
 
-    const summary = calculateMonthSalary(myProfile, '2026-10', recordedDays, [], '2026-10-02');
-    expect(summary.workedDaysCount).toBe(2);
-    expect(summary.totalEarnedSoFar).toBe(3976 + 2982);
-    expect(summary.futureForecast).toBeGreaterThan(0);
-    expect(summary.monthTotalForecast).toBe(summary.totalEarnedSoFar + summary.futureForecast);
+  it('tracks current progress inside the month', () => {
+    // 10 Oct 2026 is a Saturday; workdays passed: 1,2,5,6,7,8,9 Oct = 7.
+    const s = calcAutoMonth(auto, '2026-10', '2026-10-10');
+    expect(s.workDaysPassed).toBe(7);
+    expect(s.workDaysLeft).toBe(15);
+    expect(s.hoursPassed).toBe(56);
+    expect(s.hoursLeft).toBe(120);
+    expect(s.earnedSoFar).toBe(7 * 8 * 497); // 27 832
+    expect(s.leftToEarn).toBe(87472 - 27832);
+    expect(s.earnedSoFar + s.leftToEarn).toBe(s.planTotal);
+  });
+
+  it('month start: nothing earned yet; month end: everything earned', () => {
+    const start = calcAutoMonth(auto, '2026-11', '2026-10-31');
+    expect(start.workDaysPassed).toBe(0);
+    expect(start.earnedSoFar).toBe(0);
+    const end = calcAutoMonth(auto, '2026-10', '2026-10-31');
+    expect(end.workDaysPassed).toBe(22);
+    expect(end.earnedSoFar).toBe(end.planTotal);
+    expect(end.leftToEarn).toBe(0);
+  });
+
+  it('handles the New Year month correctly (January 2026, 15 workdays)', () => {
+    const s = calcAutoMonth(auto, '2026-01', '2026-01-15');
+    expect(s.workDaysTotal).toBe(15);
+    // 12..15 Jan are the only workdays passed by 15 Jan.
+    expect(s.workDaysPassed).toBe(4);
+  });
+
+  it('a non-working day earns nothing and a workday shows the day price', () => {
+    const s = calcAutoMonth(auto, '2026-10', '2026-10-05');
+    const monday = s.days.find(d => d.date === '2026-10-05');
+    const sunday = s.days.find(d => d.date === '2026-10-04');
+    expect(monday?.isWorkDay).toBe(true);
+    expect(monday?.amount).toBe(3976); // 8 × 497
+    expect(sunday?.isWorkDay).toBe(false);
+    expect(sunday?.amount).toBe(0);
+  });
+
+  it('plans the next payout from advance/salary days', () => {
+    const next = nextPlannedPayout([auto], '2026-10-20');
+    expect(next).not.toBeNull();
+    expect(next?.date).toBe('2026-10-25'); // advance of October
+    expect(next?.amount).toBe(Math.round(87472 / 2));
+    const afterAdvance = nextPlannedPayout([auto], '2026-10-26');
+    expect(afterAdvance?.date).toBe('2026-11-10'); // remainder of October plan
+    expect(afterAdvance?.amount).toBe(87472 - Math.round(87472 / 2));
+    // Manual profiles never produce planned payouts.
+    expect(nextPlannedPayout([manual], '2026-10-20')).toBeNull();
+  });
+
+  it('default profile stores the requested conditions as settings', () => {
+    expect(DEFAULT_AUTO_PROFILE.mode).toBe('automatic');
+    expect(DEFAULT_AUTO_PROFILE.schedule_type).toBe('5/2');
+    expect(DEFAULT_AUTO_PROFILE.hours_per_day).toBe(8);
+    expect(DEFAULT_AUTO_PROFILE.settings.hourly_rate).toBe(497);
+    expect(DEFAULT_AUTO_PROFILE.settings.probation_rate).toBe(442);
+    expect(DEFAULT_AUTO_PROFILE.probation_end_date).toBe('2026-09-30'); // 1 month of probation
+  });
+});
+
+describe('«Зайчик» — manual shift entries', () => {
+  const entries = [
+    entry('e1', '2026-10-05', 4000),
+    entry('e2', '2026-10-06', 4200),
+    entry('e3', '2026-10-07', 3800),
+    entry('e4', '2026-10-08', 4100),
+    entry('e5', '2026-09-28', 3500),
+    entry('e6', '2026-10-06', 5000, 'other-profile'),
+  ];
+
+  it('sums a month: 4 shifts, 16 100 ₽, average 4 025 ₽', () => {
+    const monthEntries = entriesOfMonth(entries, '2026-10', manual.id);
+    const stats = manualStats(monthEntries);
+    expect(stats.count).toBe(4);
+    expect(stats.total).toBe(16100);
+    expect(stats.avg).toBe(4025);
+    expect(stats.min).toBe(3800);
+    expect(stats.max).toBe(4200);
+  });
+
+  it('separates profiles: one entries entity, many owners', () => {
+    const mine = entriesOfMonth(entries, '2026-10', manual.id);
+    const other = entriesOfMonth(entries, '2026-10', 'other-profile');
+    expect(mine).toHaveLength(4);
+    expect(other).toHaveLength(1);
+    expect(other[0].amount).toBe(5000);
+  });
+
+  it('groups by month for the simple chart', () => {
+    const groups = manualMonthGroups(entries, manual.id);
+    expect(groups).toEqual([
+      { month: '2026-09', count: 1, total: 3500 },
+      { month: '2026-10', count: 4, total: 16100 },
+    ]);
+  });
+
+  it('is money-safe: no floating point drift on sums', () => {
+    const cents = [entry('c1', '2026-10-01', 0.1), entry('c2', '2026-10-02', 0.2)];
+    expect(manualStats(cents).total).toBe(0.3);
+    expect(sumMoney([0.1, 0.2, 0.3])).toBe(0.6);
+    const many = Array.from({ length: 100 }, (_, i) => entry(`m${i}`, '2026-10-01', 4000.01));
+    expect(manualStats(many).total).toBe(400001);
+  });
+
+  it('handles an empty month without NaN', () => {
+    const stats = manualStats(entriesOfMonth(entries, '2026-01', manual.id));
+    expect(stats).toEqual({ count: 0, total: 0, avg: 0, min: 0, max: 0 });
   });
 });

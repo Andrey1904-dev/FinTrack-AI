@@ -2,149 +2,123 @@ import { useEffect, useMemo } from 'react';
 import { useAuth } from './auth';
 import { useDeleteRow, useRows, useSaveRow } from './hooks';
 import {
-  calculateMonthSalary,
-  DEFAULT_GIRL_SALARY_PROFILE,
-  DEFAULT_MY_SALARY_PROFILE,
-  type MonthSalarySummary,
+  calcAutoMonth,
+  DEFAULT_AUTO_PROFILE,
+  DEFAULT_MANUAL_PROFILE,
+  entriesOfMonth,
+  manualStats,
+  sumMoney,
+  type AutoMonthSummary,
 } from '@/lib/calc/salary';
-import { todayISO } from '@/lib/dates';
+import { monthKey, todayISOInZone } from '@/lib/dates';
 import type { SalaryProfile } from '@/types/salary';
+
+/** Salary math is pinned to the user's home timezone (Yekaterinburg), not UTC. */
+export function salaryToday(): string {
+  return todayISOInZone();
+}
 
 export function useSalaryProfiles() {
   const { user } = useAuth();
   const profilesQuery = useRows('salary_profiles');
-  const ratesQuery = useRows('salary_rates');
   const saveProfile = useSaveRow('salary_profiles');
   const deleteProfile = useDeleteRow('salary_profiles');
-  const saveRate = useSaveRow('salary_rates');
-  const deleteRate = useDeleteRow('salary_rates');
 
-  // Auto-seed default profiles if user has none
+  // First run: create the two default contexts («Заяц» + «Зайчик» for the girl).
   useEffect(() => {
     if (!profilesQuery.isLoading && profilesQuery.rows.length === 0 && user) {
       void (async () => {
         try {
-          await saveProfile.mutateAsync(DEFAULT_MY_SALARY_PROFILE as unknown as Partial<SalaryProfile>);
-          await saveProfile.mutateAsync(DEFAULT_GIRL_SALARY_PROFILE as unknown as Partial<SalaryProfile>);
+          await saveProfile.mutateAsync(DEFAULT_AUTO_PROFILE as unknown as Partial<SalaryProfile>);
+          await saveProfile.mutateAsync(DEFAULT_MANUAL_PROFILE as unknown as Partial<SalaryProfile>);
         } catch (e) {
-          console.error('Failed to auto-seed default salary profiles', e);
+          console.error('Failed to seed default salary profiles', e);
         }
       })();
     }
   }, [profilesQuery.isLoading, profilesQuery.rows.length, user, saveProfile]);
 
+  const profiles = profilesQuery.rows;
   return {
-    profiles: profilesQuery.rows,
-    rates: ratesQuery.rows,
-    isLoading: profilesQuery.isLoading || ratesQuery.isLoading,
-    error: profilesQuery.error || ratesQuery.error,
+    profiles,
+    autoProfiles: profiles.filter(p => p.active && p.mode === 'automatic'),
+    isLoading: profilesQuery.isLoading,
+    error: profilesQuery.error,
     saveProfile,
     deleteProfile,
-    saveRate,
-    deleteRate,
-    refetch: async () => {
-      await Promise.all([profilesQuery.refetch(), ratesQuery.refetch()]);
-    },
+    refetch: profilesQuery.refetch,
   };
 }
 
-export function useSalaryData(month: string, selectedProfileId?: string) {
-  const { profiles, rates, isLoading: profilesLoading, saveProfile, deleteProfile } = useSalaryProfiles();
-  const workDaysQuery = useRows('salary_work_days');
-  const paymentsQuery = useRows('salary_payments');
-  const goalsQuery = useRows('salary_goals');
+export function useSalaryEntries() {
+  const entriesQuery = useRows('salary_entries');
+  const saveEntry = useSaveRow('salary_entries');
+  const deleteEntry = useDeleteRow('salary_entries');
+  return {
+    entries: entriesQuery.rows,
+    isLoading: entriesQuery.isLoading,
+    error: entriesQuery.error,
+    saveEntry,
+    deleteEntry,
+  };
+}
 
-  const saveWorkDay = useSaveRow('salary_work_days');
-  const deleteWorkDay = useDeleteRow('salary_work_days');
-  const savePayment = useSaveRow('salary_payments');
-  const deletePayment = useDeleteRow('salary_payments');
-  const saveGoal = useSaveRow('salary_goals');
-  const deleteGoal = useDeleteRow('salary_goals');
+export interface SalarySummary {
+  month: string;
+  /** «Заяц»: plan and current progress of all automatic profiles. */
+  autoPlan: number;
+  autoEarned: number;
+  /** «Зайчик»: sum of manual entries of the month (all profiles). */
+  manualTotal: number;
+  manualCount: number;
+  /** Plan + facts: what the household is on track to earn this month. */
+  totalForecast: number;
+  /** Earned so far: automatic progress + manual facts. */
+  totalEarned: number;
+}
 
-  const today = todayISO();
+/**
+ * One aggregated salary number for the rest of the app
+ * (Dashboard, Goals, Debts, Car Calculator, What-if).
+ * Salary is the data source; no duplicate finance operations are created.
+ */
+export function useSalarySummary(month?: string) {
+  const today = salaryToday();
+  const m = month ?? monthKey(today);
+  const { profiles, autoProfiles, isLoading: profilesLoading, error: profilesError } = useSalaryProfiles();
+  const { entries, isLoading: entriesLoading, error: entriesError } = useSalaryEntries();
 
-  // Summaries per profile
-  const profileSummaries = useMemo(() => {
-    const map = new Map<string, MonthSalarySummary>();
-    for (const p of profiles) {
-      if (!p.active) continue;
-      const summary = calculateMonthSalary(p, month, workDaysQuery.rows, rates, today);
-      map.set(p.id, summary);
-    }
+  const autoSummaries = useMemo(() => {
+    const map = new Map<string, AutoMonthSummary>();
+    for (const p of autoProfiles) map.set(p.id, calcAutoMonth(p, m, today));
     return map;
-  }, [profiles, month, workDaysQuery.rows, rates, today]);
+  }, [autoProfiles, m, today]);
 
-  // Overall family aggregate
-  const familySummary = useMemo(() => {
-    let earnedSoFar = 0;
-    let forecast = 0;
-    let expectedPayments = 0;
-    let paidPayments = 0;
-
-    let myEarned = 0;
-    let myForecast = 0;
-    let girlEarned = 0;
-    let girlForecast = 0;
-
-    for (const p of profiles) {
-      if (!p.active) continue;
-      const s = profileSummaries.get(p.id);
-      if (!s) continue;
-      earnedSoFar += s.totalEarnedSoFar;
-      forecast += s.monthTotalForecast;
-
-      const isMe = p.name.toLowerCase().includes('моя') || p.schedule_type === '5/2';
-      const isGirl = p.name.toLowerCase().includes('девушк') || p.schedule_type === '2/2';
-
-      if (isMe) {
-        myEarned += s.totalEarnedSoFar;
-        myForecast += s.monthTotalForecast;
-      } else if (isGirl) {
-        girlEarned += s.totalEarnedSoFar;
-        girlForecast += s.monthTotalForecast;
-      }
-    }
-
-    const monthPayments = paymentsQuery.rows.filter(pm => pm.payment_date.startsWith(month));
-    for (const pm of monthPayments) {
-      if (pm.status === 'paid') paidPayments += pm.actual_amount;
-      else if (pm.status === 'expected') expectedPayments += pm.expected_amount;
-    }
-
+  const summary = useMemo<SalarySummary>(() => {
+    const autoPlan = sumMoney([...autoSummaries.values()].map(s => s.planTotal));
+    const autoEarned = sumMoney([...autoSummaries.values()].map(s => s.earnedSoFar));
+    const monthEntries = entriesOfMonth(entries, m);
+    const manual = manualStats(monthEntries);
     return {
-      earnedSoFar,
-      forecast,
-      expectedPayments,
-      paidPayments,
-      remainingExpected: Math.max(0, forecast - paidPayments),
-      myEarned,
-      myForecast,
-      girlEarned,
-      girlForecast,
+      month: m,
+      autoPlan,
+      autoEarned,
+      manualTotal: manual.total,
+      manualCount: manual.count,
+      totalForecast: sumMoney([autoPlan, manual.total]),
+      totalEarned: sumMoney([autoEarned, manual.total]),
     };
-  }, [profiles, profileSummaries, paymentsQuery.rows, month]);
-
-  const activeProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0] || null;
-  const activeSummary = activeProfile ? profileSummaries.get(activeProfile.id) : null;
+  }, [autoSummaries, entries, m]);
 
   return {
+    today,
+    month: m,
     profiles,
-    rates,
-    workDays: workDaysQuery.rows,
-    payments: paymentsQuery.rows,
-    goals: goalsQuery.rows,
-    profileSummaries,
-    familySummary,
-    activeProfile,
-    activeSummary,
-    isLoading: profilesLoading || workDaysQuery.isLoading || paymentsQuery.isLoading,
-    saveProfile,
-    deleteProfile,
-    saveWorkDay,
-    deleteWorkDay,
-    savePayment,
-    deletePayment,
-    saveGoal,
-    deleteGoal,
+    autoProfiles,
+    autoSummaries,
+    entries,
+    summary,
+    isLoading: profilesLoading || entriesLoading,
+    error: profilesError || entriesError,
   };
 }

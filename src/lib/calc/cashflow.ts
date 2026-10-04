@@ -1,9 +1,9 @@
 import { addDaysISO, addMonthsISO, daysBetween, monthEnd, monthKey, shiftMonthKey, todayISO } from '../dates';
 import { round2 } from '../format';
 import type { Car, CarExpense, CarRefuel, CarService, Debt, Goal, RecurringPayment } from '@/types';
-import type { SalaryPayment, SalaryProfile, SalaryRate, SalaryWorkDay } from '@/types/salary';
+import type { SalaryProfile } from '@/types/salary';
 import { advance } from './recurring';
-import { calculateMonthSalary } from './salary';
+import { calcAutoMonth } from './salary';
 
 export const CASH_FLOW_HORIZONS = [7, 30, 90, 180, 365, 730] as const;
 export type CashFlowHorizon = (typeof CASH_FLOW_HORIZONS)[number];
@@ -65,9 +65,6 @@ export interface CashFlowInput {
   carExpenses: CarExpense[];
   carService: CarService[];
   salaryProfiles?: SalaryProfile[];
-  salaryWorkDays?: SalaryWorkDay[];
-  salaryRates?: SalaryRate[];
-  salaryPayments?: SalaryPayment[];
   plannedPurchases?: PlannedPurchase[];
   horizonDays: number;
   today?: string;
@@ -232,31 +229,16 @@ function addPurchaseEvents(events: CashFlowEvent[], purchases: PlannedPurchase[]
   }
 }
 
+/**
+ * «Заяц» → planned income. The month plan of every automatic payroll profile
+ * is projected as two payouts: the advance (advance_day of the month) and the
+ * remainder (salary_day of the next month). Manual «Зайчик» entries are facts
+ * of the past and are deliberately not projected into the future.
+ */
 function addSalaryEvents(events: CashFlowEvent[], input: CashFlowInput, today: string, end: string) {
   if (!input.salaryProfiles || input.salaryProfiles.length === 0) return;
 
-  const profiles = input.salaryProfiles.filter(p => p.active);
-  const workDays = input.salaryWorkDays ?? [];
-  const rates = input.salaryRates ?? [];
-  const payments = input.salaryPayments ?? [];
-
-  // 1. Add any explicitly scheduled expected payments
-  for (const pm of payments) {
-    if (pm.status === 'expected' && pm.payment_date >= today && pm.payment_date <= end) {
-      const profile = profiles.find(p => p.id === pm.salary_profile_id);
-      const title = profile ? `Зарплата: ${profile.name}` : 'Зарплата';
-      pushEvent(events, {
-        id: `salary-payment:${pm.id}`,
-        date: pm.payment_date,
-        title,
-        amount: pm.expected_amount,
-        kind: 'income',
-      }, today, end);
-    }
-  }
-
-  // 2. For active profiles without explicit payment rows for future months, generate projected payouts on payday
-  // Typically advance_day (e.g. 25th) and salary_day (e.g. 10th of next month)
+  const profiles = input.salaryProfiles.filter(p => p.active && p.mode === 'automatic');
   const currentMonth = monthKey(today);
   const endMonth = monthKey(end);
 
@@ -264,23 +246,17 @@ function addSalaryEvents(events: CashFlowEvent[], input: CashFlowInput, today: s
   let guard = 0;
   while (m <= endMonth && guard++ < 24) {
     for (const profile of profiles) {
-      const summary = calculateMonthSalary(profile, m, workDays, rates, today);
+      const summary = calcAutoMonth(profile, m, today);
       const advDay = profile.settings.advance_day ?? 25;
       const salDay = profile.settings.salary_day ?? 10;
 
       const advDate = `${m}-${String(advDay).padStart(2, '0')}`;
-      const nextMonthKey = shiftMonthKey(m, 1);
-      const salDate = `${nextMonthKey}-${String(salDay).padStart(2, '0')}`;
+      const salDate = `${shiftMonthKey(m, 1)}-${String(salDay).padStart(2, '0')}`;
 
-      // Check if already covered by an explicit payment
-      const hasAdvPayment = payments.some(p => p.salary_profile_id === profile.id && p.payment_date === advDate);
-      const hasSalPayment = payments.some(p => p.salary_profile_id === profile.id && p.payment_date === salDate);
-
-      // Half to advance, half to main salary payout
-      const totalForecast = summary.monthTotalForecast;
-      if (totalForecast > 0) {
-        const half = round2(totalForecast / 2);
-        if (!hasAdvPayment && advDate >= today && advDate <= end) {
+      const plan = summary.planTotal;
+      if (plan > 0) {
+        const half = round2(plan / 2);
+        if (advDate >= today && advDate <= end) {
           pushEvent(events, {
             id: `salary-proj:${profile.id}:${advDate}:adv`,
             date: advDate,
@@ -289,12 +265,12 @@ function addSalaryEvents(events: CashFlowEvent[], input: CashFlowInput, today: s
             kind: 'income',
           }, today, end);
         }
-        if (!hasSalPayment && salDate >= today && salDate <= end) {
+        if (salDate >= today && salDate <= end) {
           pushEvent(events, {
             id: `salary-proj:${profile.id}:${salDate}:sal`,
             date: salDate,
             title: `Зарплата · ${profile.name}`,
-            amount: round2(totalForecast - half),
+            amount: round2(plan - half),
             kind: 'income',
           }, today, end);
         }

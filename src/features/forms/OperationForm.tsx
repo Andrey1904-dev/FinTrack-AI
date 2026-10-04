@@ -82,10 +82,10 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
             label="Умный ввод"
             hint={
               salaryParsed
-                ? `Распознано как зарплата: ${salaryParsed.type === 'salary_hours' ? `${salaryParsed.hours} ч` : `${salaryParsed.cases} чехлов`} на ${salaryParsed.date}. Нажмите кнопку ниже, чтобы внести рабочие часы.`
+                ? `Распознано как смена: ${salaryParsed.amount} ₽ на ${salaryParsed.date}. Нажмите кнопку ниже, чтобы записать её в «Зайчик».`
                 : parsed
                   ? `Распознано: ${parsed.type === 'income' ? 'доход' : 'расход'} ${parsed.amount} ₽ · ${parsed.category} · раздел «${parsed.section}». Проверьте поля ниже и сохраните.`
-                  : 'Например: +1200 бензин — поля заполнятся сами. Также понимает: «Отработал сегодня 8 часов», «350 чехлов»'
+                  : 'Например: +1200 бензин — поля заполнятся сами. Также понимает: «заработал 4000», «вчера смена 3800»'
             }
           >
             {id => (
@@ -99,11 +99,11 @@ export function OperationForm({ type: initialType, initial, onDone }: { type: 'i
                     size="sm"
                     variant="primary"
                     onClick={() => {
-                      quick.open('salary_hours', { hours: salaryParsed.hours, date: salaryParsed.date });
+                      quick.open('salary_entry', { amount: salaryParsed.amount, date: salaryParsed.date });
                       onDone();
                     }}
                   >
-                    Внести {salaryParsed.hours ? `${salaryParsed.hours} ч` : `${salaryParsed.cases} чехлов`} в зарплату
+                    Записать смену {salaryParsed.amount} ₽ в «Зайчик»
                   </Button>
                 )}
               </div>

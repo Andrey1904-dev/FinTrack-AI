@@ -5,11 +5,10 @@ import { Modal } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/form';
 import { PageHeader, Panel } from '@/components/ui/misc';
 import { useRows } from '@/data/hooks';
-import { useSalaryData, useSalaryProfiles } from '@/data/useSalary';
+import { useSalarySummary } from '@/data/useSalary';
 import { parseSalaryQuickEntry } from '@/lib/calc/parse';
 import { fmtDate, money } from '@/lib/format';
 import { useQuick } from '@/features/forms/QuickProvider';
-import { todayISO, monthKey } from '@/lib/dates';
 
 interface Hit {
   id: string;
@@ -33,11 +32,7 @@ function useSearchHits(query: string): Hit[] {
   const tasks = useRows('tasks').rows;
   const goals = useRows('financial_goals').rows;
   const commands = useRows('commands').rows;
-  const salaryWorkDays = useRows('salary_work_days').rows;
-  const { profiles } = useSalaryProfiles();
-  const today = todayISO();
-  const currentMonth = monthKey(today);
-  const { familySummary } = useSalaryData(currentMonth);
+  const { profiles, entries: salaryEntries, summary: salarySummary, month: currentMonth } = useSalarySummary();
   const deferred = useDeferredValue(query);
 
   return useMemo(() => {
@@ -47,69 +42,49 @@ function useSearchHits(query: string): Hit[] {
       v.some(x => x !== null && x !== undefined && String(x).toLowerCase().includes(q));
     const hits: Hit[] = [];
 
-    // Salary AI-like queries: "сколько я заработал", "зарплата", "доход"
+    // Salary queries: "сколько я заработал", "зарплата", "доход"
     if (q.includes('сколько') && (q.includes('заработал') || q.includes('доход') || q.includes('зарплат'))) {
       hits.push({
         id: 'salary-summary-query',
         group: 'Зарплаты',
-        title: `💰 ${currentMonth} · План: ${money(familySummary.forecast)} · Факт: ${money(familySummary.earnedSoFar)}`,
-        sub: `Моя: ${money(familySummary.myForecast)} / ${money(familySummary.myEarned)} · Девушка: ${money(familySummary.girlForecast)} / ${money(familySummary.girlEarned)}`,
-        link: '/salary',
-      });
-    }
-    if (q.includes('до зарплаты') || q.includes('когда зарплата') || q.includes('ближайшая зарплата')) {
-      hits.push({
-        id: 'salary-next',
-        group: 'Зарплаты',
-        title: '📅 Ближайшая выплата зарплаты',
-        sub: 'Откройте календарь зарплат, чтобы увидеть даты аванса и получки',
+        title: `💰 ${currentMonth} · План: ${money(salarySummary.totalForecast)} · Факт: ${money(salarySummary.totalEarned)}`,
+        sub: `🐰 Заяц: ${money(salarySummary.autoPlan)} план · 🐰 Зайчик: ${money(salarySummary.manualTotal)}`,
         link: '/salary',
       });
     }
 
-    // Smart Input check for salary
+    // Smart Input: "заработал 4000" → quick «Зайчик» entry
     const salaryQuick = parseSalaryQuickEntry(q);
     if (salaryQuick) {
-      if (salaryQuick.type === 'salary_hours') {
-        hits.push({
-          id: 'quick-salary-hours',
-          group: 'Быстрое действие',
-          title: `⏱️ Записать ${salaryQuick.hours} ч (${fmtDate(salaryQuick.date)})`,
-          sub: 'Нажмите, чтобы открыть карточку подтверждения смены',
-          link: '/salary',
-          action: () => quick.open('salary_hours', { hours: salaryQuick.hours, date: salaryQuick.date }),
-        });
-      } else if (salaryQuick.type === 'salary_shift') {
-        hits.push({
-          id: 'quick-salary-shift',
-          group: 'Быстрое действие',
-          title: `📦 Записать ${salaryQuick.cases} чехлов (${fmtDate(salaryQuick.date)})`,
-          sub: 'Сдельная смена для профиля 2/2',
-          link: '/salary',
-          action: () => quick.open('salary_hours', { hours: 11, date: salaryQuick.date }),
-        });
-      }
+      hits.push({
+        id: 'quick-salary-entry',
+        group: 'Быстрое действие',
+        title: `🐰 Записать смену: ${money(salaryQuick.amount)} (${fmtDate(salaryQuick.date)})`,
+        sub: 'Нажмите, чтобы сохранить заработок за смену',
+        link: '/salary',
+        action: () => quick.open('salary_entry', { amount: salaryQuick.amount, date: salaryQuick.date }),
+      });
     }
 
-    // Salary profiles and work days
+    // Salary profiles and manual shifts
     for (const p of profiles) {
-      if (has(p.name, p.schedule_type, 'зарплата')) {
+      if (has(p.name, 'зарплата')) {
         hits.push({
           id: p.id,
           group: 'Зарплаты',
           title: `Профиль: ${p.name}`,
-          sub: `График ${p.schedule_type} · ${p.payment_type === 'hourly' ? 'Почасовая' : 'Сдельная'}`,
+          sub: p.mode === 'automatic' ? '🐰 Заяц · автоматический расчёт' : '🐰 Зайчик · ручные смены',
           link: '/salary',
         });
       }
     }
-    for (const d of salaryWorkDays.slice(0, 15)) {
-      if (has(d.note, d.date, d.earned_amount, d.status)) {
+    for (const e of salaryEntries.slice(0, 15)) {
+      if (has(e.note, e.date, e.amount)) {
         hits.push({
-          id: d.id,
+          id: e.id,
           group: 'Зарплаты',
-          title: `${fmtDate(d.date)}: ${d.actual_hours} ч · ${money(d.earned_amount)}`,
-          sub: `${d.status} ${d.note ? '· ' + d.note : ''}`,
+          title: `${fmtDate(e.date)}: ${money(e.amount)}`,
+          sub: e.note || 'Смена',
           link: '/salary',
         });
       }
@@ -154,7 +129,7 @@ function useSearchHits(query: string): Hit[] {
     for (const c of commands)
       if (has(c.command, c.description, c.category)) hits.push({ id: c.id, group: 'Команды', title: c.command, sub: c.description, link: '/commands' });
     return hits;
-  }, [deferred, ops, debts, cars, service, expenses, notes, tasks, goals, commands, profiles, salaryWorkDays, quick, familySummary, currentMonth]);
+  }, [deferred, ops, debts, cars, service, expenses, notes, tasks, goals, commands, profiles, salaryEntries, quick, salarySummary, currentMonth]);
 }
 
 export function SearchPanel({ onNavigate, autoFocus }: { onNavigate: (link: string) => void; autoFocus?: boolean }) {

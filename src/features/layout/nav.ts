@@ -35,7 +35,7 @@ export const NAV: NavItem[] = [
   { to: '/', label: 'Главная', code: '01', hint: 'что происходит сейчас', icon: LayoutDashboard, primary: true, group: 'main' },
   { to: '/today', label: 'Сегодня', code: '02', hint: 'что сделать сегодня', icon: CalendarCheck, group: 'main' },
   { to: '/finance', label: 'Финансы', code: '03', hint: 'куда уходят деньги', icon: Wallet, primary: true, group: 'main' },
-  { to: '/salary', label: 'Зарплата', code: '04', hint: '5/2, 2/2 и прогноз', icon: Banknote, primary: true, group: 'main' },
+  { to: '/salary', label: 'Зарплата', code: '04', hint: '🐰 Заяц и 🐰 Зайчик', icon: Banknote, primary: true, group: 'main' },
   { to: '/debts', label: 'Долги', code: '05', hint: 'когда закрою', icon: Landmark, group: 'main' },
   { to: '/cars', label: 'Авто', code: '06', hint: 'сколько стоит машина', icon: Car, group: 'main' },
   { to: '/calc', label: 'Автокалькулятор', code: '07', hint: 'во что обойдётся', icon: Calculator, group: 'plan' },

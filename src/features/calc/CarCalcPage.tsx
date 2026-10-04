@@ -14,8 +14,7 @@ import { fmtDate, money, num } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { CarScenarioParams, Scenario } from '@/types';
 import { asText, NumField } from './NumField';
-import { useSalaryData } from '@/data/useSalary';
-import { monthKey, todayISO } from '@/lib/dates';
+import { useSalarySummary } from '@/data/useSalary';
 
 type Draft = Record<keyof CarScenarioParams, string>;
 interface CompareRow {
@@ -81,10 +80,9 @@ export default function CarCalcPage() {
   const result = useMemo(() => calcOwnership(params), [params]);
   const stats = useMemo(() => fuelStats(refuels.rows.filter(r => r.car_id === current?.id)), [refuels.rows, current?.id]);
 
-  // Salary integration for affordability
-  const salaryMonth = monthKey(todayISO());
-  const { familySummary } = useSalaryData(salaryMonth);
-  const familyIncome = familySummary.forecast > 0 ? familySummary.forecast : recurring.rows.filter(r => r.active && r.kind === 'income').reduce((s, r) => s + r.amount, 0);
+  // Salary integration for affordability («Заяц» plan + «Зайчик» facts)
+  const { summary: salarySummary } = useSalarySummary();
+  const familyIncome = salarySummary.totalForecast > 0 ? salarySummary.totalForecast : recurring.rows.filter(r => r.active && r.kind === 'income').reduce((s, r) => s + r.amount, 0);
   const recurringExpenses = recurring.rows.filter(r => r.active && r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
   const debtPayments = debts.rows.filter(d => d.status === 'active').reduce((s, d) => s + d.min_payment, 0);
   const safeCarPayment = Math.max(0, familyIncome - recurringExpenses - debtPayments - result.runningMonthly);
