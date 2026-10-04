@@ -125,12 +125,20 @@ export default function GoalsPage() {
   const [filter, setFilter] = useState<'active' | 'done' | 'all'>('active');
   const today = todayISO();
   const currentMonth = today.slice(0, 7);
-  const { familySummary } = useSalaryData(currentMonth);
+  const { familySummary, payments, profiles } = useSalaryData(currentMonth);
 
   // Estimated free cash after basic living (e.g. 20% of family monthly forecast can go to savings)
   const estimatedMonthlySavingsPace = familySummary.forecast > 0
     ? Math.round(familySummary.forecast * 0.2)
     : 30000;
+
+  // Nearest expected salary payout
+  const nearestPayout = useMemo(() => {
+    const expected = payments.filter(p => p.status === 'expected' && p.payment_date >= today).sort((a, b) => a.payment_date.localeCompare(b.payment_date))[0];
+    if (!expected) return null;
+    const prof = profiles.find(p => p.id === expected.salary_profile_id);
+    return { date: expected.payment_date, amount: expected.expected_amount, profileName: prof?.name ?? 'Зарплата' };
+  }, [payments, profiles, today]);
 
   const remove = async (g: Goal) => {
     if (!(await confirm({ title: 'Удалить цель?', text: g.title, confirmText: 'Удалить', danger: true }))) return;
@@ -273,6 +281,25 @@ export default function GoalsPage() {
                         </p>
                         <p className="silk text-mute">
                           Прогноз накопления из зарплат (+{money(estimatedMonthlySavingsPace)}/мес): ориентировочный срок достижения ~{Math.ceil(left / Math.max(1, estimatedMonthlySavingsPace))} мес.
+                        </p>
+                        {nearestPayout && (
+                          <p className="text-cyan">
+                            После ближайшей зарплаты {fmtDate(nearestPayout.date)} ({nearestPayout.profileName} {money(nearestPayout.amount)}):{' '}
+                            <span className="font-semibold">
+                              {money(g.current_amount + Math.min(left, nearestPayout.amount))} / {money(g.target_amount)} (
+                              {pct(Math.min(100, ((g.current_amount + Math.min(left, nearestPayout.amount)) / g.target_amount) * 100))})
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {months === null && left > 0 && nearestPayout && (
+                      <div className="mt-2.5 border border-line bg-rail/40 px-3 py-2 text-[11.5px] text-dim">
+                        <p className="text-cyan">
+                          После ближайшей зарплаты {fmtDate(nearestPayout.date)} (+{money(nearestPayout.amount)}):{' '}
+                          <span className="font-semibold">
+                            {money(g.current_amount + Math.min(left, nearestPayout.amount))} / {money(g.target_amount)}
+                          </span>
                         </p>
                       </div>
                     )}

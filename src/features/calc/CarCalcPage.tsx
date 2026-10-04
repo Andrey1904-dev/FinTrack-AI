@@ -14,6 +14,8 @@ import { fmtDate, money, num } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { CarScenarioParams, Scenario } from '@/types';
 import { asText, NumField } from './NumField';
+import { useSalaryData } from '@/data/useSalary';
+import { monthKey, todayISO } from '@/lib/dates';
 
 type Draft = Record<keyof CarScenarioParams, string>;
 interface CompareRow {
@@ -59,6 +61,8 @@ const ROWS: Array<{ label: string; value: (p: CarScenarioParams, o: ReturnType<t
 export default function CarCalcPage() {
   const scenarios = useRows('car_scenarios');
   const refuels = useRows('car_refuels');
+  const recurring = useRows('recurring_payments');
+  const debts = useRows('debts');
   const { current } = useCurrentCar();
   const save = useSaveRow('car_scenarios');
   const del = useDeleteRow('car_scenarios');
@@ -76,6 +80,15 @@ export default function CarCalcPage() {
   const params = useMemo(() => toParams(draft), [draft]);
   const result = useMemo(() => calcOwnership(params), [params]);
   const stats = useMemo(() => fuelStats(refuels.rows.filter(r => r.car_id === current?.id)), [refuels.rows, current?.id]);
+
+  // Salary integration for affordability
+  const salaryMonth = monthKey(todayISO());
+  const { familySummary } = useSalaryData(salaryMonth);
+  const familyIncome = familySummary.forecast > 0 ? familySummary.forecast : recurring.rows.filter(r => r.active && r.kind === 'income').reduce((s, r) => s + r.amount, 0);
+  const recurringExpenses = recurring.rows.filter(r => r.active && r.kind === 'expense').reduce((s, r) => s + r.amount, 0);
+  const debtPayments = debts.rows.filter(d => d.status === 'active').reduce((s, d) => s + d.min_payment, 0);
+  const safeCarPayment = Math.max(0, familyIncome - recurringExpenses - debtPayments - result.runningMonthly);
+  const remainingAfterCar = familyIncome - recurringExpenses - debtPayments - result.totalMonthly;
 
   const set = (k: keyof CarScenarioParams) => (v: string) => setDraft(d => ({ ...d, [k]: v }));
   const fillFromMyCar = () => {
@@ -191,6 +204,26 @@ export default function CarCalcPage() {
               <Stat label="Переплата" value={result.overpayment ? money(result.overpayment) : '—'} tone={result.overpayment ? 'bad' : undefined} sub="по процентам" />
               <Stat label="Топливо" value={money(result.fuelMonthly)} tone="accent" sub={`${params.monthlyKm} км/мес`} />
             </div>
+
+            <Panel label="Доступность по зарплатам">
+              <div className="space-y-3 text-[11.5px]">
+                <div className="grid grid-cols-2 gap-3">
+                  <Stat label="Доход семьи" value={money(familyIncome)} tone="good" sub="зарплаты + доходы" />
+                  <Stat label="Обязательства" value={money(recurringExpenses + debtPayments)} sub="расходы + долги" />
+                </div>
+                <div className="rounded-[2px] border border-line bg-panel/60 p-3">
+                  <p className="silk mb-1 text-mute">Безопасный платёж на авто (до содержания):</p>
+                  <p className="tnum text-[15px] font-bold text-cyan">{money(safeCarPayment)}</p>
+                  <p className="mt-1 text-mute">
+                    Остаток после всех платежей за авто:{' '}
+                    <span className={remainingAfterCar >= 0 ? 'text-cyan' : 'text-red'}>{money(remainingAfterCar)}</span>
+                  </p>
+                </div>
+                <p className="text-mute">
+                  Расчёт: доход {money(familyIncome)} − обязательные {money(recurringExpenses)} − долги {money(debtPayments)} − содержание авто {money(result.runningMonthly)} = {money(safeCarPayment)} доступно на кредит.
+                </p>
+              </div>
+            </Panel>
 
             <Panel label="Сохранить вариант">
               <Field label="Название">

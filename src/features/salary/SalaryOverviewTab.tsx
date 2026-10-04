@@ -1,8 +1,10 @@
 import { CheckCircle2, Clock } from 'lucide-react';
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Panel, Readout, Stat } from '@/components/ui/misc';
 import { useQuick } from '@/features/forms/QuickProvider';
 import { money } from '@/lib/format';
+import { shiftMonthKey } from '@/lib/dates';
 import type { MonthSalarySummary } from '@/lib/calc/salary';
 import type { SalaryPayment, SalaryProfile } from '@/types/salary';
 
@@ -38,6 +40,35 @@ export function SalaryOverviewTab({
 }: Props) {
   const quick = useQuick();
   const monthPayments = payments.filter(p => p.payment_date.startsWith(month));
+
+  // Projected payouts based on profile settings and month forecast (when no explicit payment rows exist)
+  const projectedPayouts = useMemo(() => {
+    const out: Array<{ profileId: string; profileName: string; date: string; amount: number; type: 'advance' | 'salary' }> = [];
+    const nextMonth = shiftMonthKey(month, 1);
+    for (const p of profiles) {
+      if (!p.active) continue;
+      const s = profileSummaries.get(p.id);
+      if (!s || s.monthTotalForecast <= 0) continue;
+      const advDay = (p.settings as { advance_day?: number })?.advance_day ?? 25;
+      const salDay = (p.settings as { salary_day?: number })?.salary_day ?? 10;
+      const total = s.monthTotalForecast;
+      const half = Math.round(total / 2);
+
+      const advDate = `${month}-${String(advDay).padStart(2, '0')}`;
+      const salDateNext = `${nextMonth}-${String(salDay).padStart(2, '0')}`;
+
+      const hasAdv = payments.some(pm => pm.salary_profile_id === p.id && pm.payment_date === advDate);
+      const hasSal = payments.some(pm => pm.salary_profile_id === p.id && pm.payment_date === salDateNext);
+
+      if (!hasAdv) {
+        out.push({ profileId: p.id, profileName: p.name, date: advDate, amount: half, type: 'advance' });
+      }
+      if (!hasSal) {
+        out.push({ profileId: p.id, profileName: p.name, date: salDateNext, amount: total - half, type: 'salary' });
+      }
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  }, [profiles, profileSummaries, payments, month]);
 
   return (
     <div className="space-y-6">
@@ -143,7 +174,7 @@ export function SalaryOverviewTab({
           <span className="silk text-mute">Интеграция с финансами без дублей</span>
         }
       >
-        {monthPayments.length === 0 ? (
+        {monthPayments.length === 0 && projectedPayouts.length === 0 ? (
           <div className="py-4 text-center">
             <p className="text-[12.5px] text-mute">
               Нет запланированных или проведённых выплат в этом месяце.
@@ -200,6 +231,32 @@ export function SalaryOverviewTab({
                 </div>
               );
             })}
+
+            {/* Projected payouts when no explicit expected payment exists */}
+            {projectedPayouts.map(pp => (
+              <div key={`${pp.profileId}-${pp.date}-${pp.type}`} className="flex flex-wrap items-center justify-between gap-3 py-3 opacity-80">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-medium text-txt">
+                      {pp.profileName} · {pp.type === 'advance' ? 'Аванс (прогноз)' : 'Зарплата (прогноз)'}
+                    </span>
+                    <span className="rounded-[2px] bg-panel px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-mute">
+                      Прогноз
+                    </span>
+                  </div>
+                  <p className="silk mt-1 text-mute">
+                    Дата: {pp.date} · Автоматический прогноз из календаря смен
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-[14px] font-semibold text-dim">
+                    {money(pp.amount)}
+                  </div>
+                  <p className="silk text-mute">без дублей в Финансы</p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Panel>

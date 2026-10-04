@@ -114,11 +114,13 @@ assert.match(renderWeeklyDigest({ from: '2026-09-21', to: '2026-09-27', rows }),
 
 for (const text of [report, budgets, goals, credits, card]) assert.ok(text.length < 4096, 'message fits the Telegram limit');
 
-const salaryMsg = renderSalarySummary({ myEarned: 56576, myForecast: 88384, girlEarned: 42350, girlForecast: 72450, familyForecast: 160834 });
+const salaryMsg = renderSalarySummary({ myEarned: 56576, myForecast: 88384, girlEarned: 42350, girlForecast: 72450, familyForecast: 160834, myHours: 149, girlShifts: 12, deviation: 61408, nextPayout: { date: '2026-10-25', days: 5 } });
 assert.match(salaryMsg, /💰 <b>Зарплата<\/b>/u);
 assert.match(salaryMsg, /Моя:[\s\S]*56 576 ₽/u);
 assert.match(salaryMsg, /Девушка:[\s\S]*42 350 ₽/u);
-assert.match(salaryMsg, /Общий прогноз: <b>160 834 ₽<\/b>/u);
+assert.match(salaryMsg, /Общий доход: <b>160 834 ₽<\/b>/u);
+assert.match(salaryMsg, /149 ч/u);
+assert.match(salaryMsg, /До зарплаты/u);
 
 const hourMsg = renderHourCard({ hours: 8, date: '2026-10-05', rate: 442, earned: 3536, profileName: 'Моя зарплата' });
 assert.match(hourMsg, /3 536 ₽/u);

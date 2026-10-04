@@ -242,21 +242,27 @@ export function renderUpcoming(items) {
   return lines.join('\n');
 }
 
-export function renderSalarySummary({ myEarned, myForecast, girlEarned, girlForecast, familyForecast }) {
+export function renderSalarySummary({ myEarned, myForecast, girlEarned, girlForecast, familyForecast, myHours, girlShifts, deviation, nextPayout }) {
   const lines = [
     '💰 <b>Зарплата</b>',
     RULE,
+    `<b>${new Date().toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}</b> · план / факт`,
+    '',
     '<b>Моя:</b>',
-    `Заработано: <b>${money(myEarned)}</b>`,
-    `Прогноз: <b>${money(myForecast)}</b>`,
+    `План: <b>${money(myForecast)}</b>`,
+    `Факт: <b>${money(myEarned)}</b>`,
+    myHours ? `Отработано: <b>${myHours} ч</b>` : '',
     '',
     '<b>Девушка:</b>',
-    `Заработано: <b>${money(girlEarned)}</b>`,
-    `Прогноз: <b>${money(girlForecast)}</b>`,
+    `План: <b>${money(girlForecast)}</b>`,
+    `Факт: <b>${money(girlEarned)}</b>`,
+    girlShifts ? `Смен: <b>${girlShifts}</b>` : '',
     '',
     RULE,
-    `Общий прогноз: <b>${money(familyForecast)}</b>`,
-  ];
+    `Общий доход: <b>${money(familyForecast)}</b>`,
+    deviation !== undefined ? `Отклонение: <b>${money(deviation)}</b>` : '',
+    nextPayout ? `До зарплаты: <b>${nextPayout.days === 0 ? 'сегодня' : `${nextPayout.days} дн.`}</b> · ${escapeHtml(nextPayout.date)}` : '',
+  ].filter(Boolean);
   return lines.join('\n');
 }
 

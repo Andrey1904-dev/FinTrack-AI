@@ -1,4 +1,4 @@
-import { BookOpen, CalendarCheck, Car, Plus, Wallet } from 'lucide-react';
+import { BookOpen, CalendarCheck, Car, Plus, Wallet, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -10,13 +10,14 @@ import { useSaveRow } from '@/data/hooks';
 import { TaskForm } from '@/features/forms/TaskForm';
 import { useOverview } from '@/features/overview/useOverview';
 import { TaskRow } from '@/features/tasks/TasksPage';
-import { reminderState } from '@/lib/calc';
+import { reminderState, isScheduledWorkDay, getRateForDate, calcDayEarnings } from '@/lib/calc';
 import { CashFlowTodayBanner } from '@/features/finance/CashFlowPanel';
-import { addDaysISO } from '@/lib/dates';
+import { addDaysISO, daysBetween, monthKey, todayISO } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { fmtDateLong, greeting, money, relativeDays } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/types';
+import { useSalaryData } from '@/data/useSalary';
 
 /** One briefing block: engineering code gutter + content. */
 function BriefingBlock({
@@ -46,6 +47,134 @@ function BriefingBlock({
         {children}
       </div>
     </section>
+  );
+}
+
+function SalaryTodayBriefing() {
+  const today = todayISO();
+  const currentMonth = monthKey(today);
+  const { profiles, profileSummaries, workDays, rates, payments } = useSalaryData(currentMonth);
+
+  const salaryToday = useMemo(() => {
+    const items: Array<{
+      profileName: string;
+      isWorkDay: boolean;
+      hours: number;
+      expectedEarn: number;
+      rate: number;
+      isProbation: boolean;
+      actual?: { hours: number; earned: number; status: string };
+      overtime?: number;
+    }> = [];
+
+    for (const p of profiles) {
+      if (!p.active) continue;
+      const isWork = isScheduledWorkDay(today, p);
+      const { rate, isProbation } = getRateForDate(today, p, rates);
+      const expected = isWork
+        ? calcDayEarnings(p, { date: today, actualHours: p.hours_per_day, status: 'worked' }, rates).earned
+        : 0;
+
+      const recorded = workDays.find(w => w.salary_profile_id === p.id && w.date === today);
+      const overtime = recorded && recorded.actual_hours > (p.hours_per_day || 8) ? recorded.actual_hours - (p.hours_per_day || 8) : 0;
+
+      items.push({
+        profileName: p.name,
+        isWorkDay: isWork,
+        hours: p.hours_per_day || 8,
+        expectedEarn: expected,
+        rate,
+        isProbation,
+        actual: recorded ? { hours: recorded.actual_hours, earned: recorded.earned_amount, status: recorded.status } : undefined,
+        overtime: overtime > 0 ? overtime : undefined,
+      });
+    }
+    return items;
+  }, [profiles, rates, workDays, today]);
+
+  const nextPayout = useMemo(() => {
+    const allExpected = payments.filter(pm => pm.status === 'expected' && pm.payment_date >= today).sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+    if (allExpected.length === 0) return null;
+    const next = allExpected[0];
+    const prof = profiles.find(pr => pr.id === next.salary_profile_id);
+    return { date: next.payment_date, amount: next.expected_amount, profileName: prof?.name ?? 'Зарплата', days: daysBetween(today, next.payment_date) };
+  }, [payments, profiles, today]);
+
+  const monthEarned = useMemo(() => {
+    let earned = 0;
+    let forecast = 0;
+    for (const p of profiles) {
+      if (!p.active) continue;
+      const s = profileSummaries.get(p.id);
+      if (s) {
+        earned += s.totalEarnedSoFar;
+        forecast += s.monthTotalForecast;
+      }
+    }
+    return { earned, forecast };
+  }, [profiles, profileSummaries]);
+
+  if (profiles.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {salaryToday.map(item => (
+          <div key={item.profileName} className="rounded-[2px] border border-line bg-panel/50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px] font-semibold text-txt">{item.profileName}</span>
+              <span className={`text-[10px] uppercase tracking-wider ${item.isWorkDay ? 'text-amber' : 'text-mute'}`}>
+                {item.isWorkDay ? 'Рабочий день' : 'Выходной'}
+              </span>
+            </div>
+            <div className="mt-2 space-y-1 text-[11.5px]">
+              <div className="flex justify-between">
+                <span className="text-mute">План часов:</span>
+                <span className="text-dim">{item.hours} ч</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-mute">Ставка:</span>
+                <span className="text-dim">
+                  {item.rate} ₽/ч {item.isProbation ? '(испытательный)' : ''}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-mute">Ожидаемо за день:</span>
+                <span className="font-semibold text-amber">{money(item.expectedEarn)}</span>
+              </div>
+              {item.actual && (
+                <div className="flex justify-between border-t border-line/60 pt-1">
+                  <span className="text-mute">Факт:</span>
+                  <span className="text-cyan">
+                    {item.actual.hours} ч · {money(item.actual.earned)} · {item.actual.status}
+                  </span>
+                </div>
+              )}
+              {item.overtime && item.overtime > 0 && (
+                <p className="text-cyan">⏱ Переработка: +{item.overtime} ч</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-line/60 pt-3 text-[11.5px]">
+        <span>
+          <span className="text-mute">Заработано в {currentMonth}:</span> <span className="font-semibold text-cyan">{money(monthEarned.earned)}</span>
+        </span>
+        <span>
+          <span className="text-mute">Прогноз месяца:</span> <span className="font-semibold text-txt">{money(monthEarned.forecast)}</span>
+        </span>
+        {nextPayout && (
+          <span>
+            <span className="text-mute">Ближайшая выплата:</span>{' '}
+            <span className="font-semibold text-amber">
+              {nextPayout.date} ({nextPayout.days === 0 ? 'сегодня' : `${nextPayout.days} дн.`}) · {money(nextPayout.amount)} · {nextPayout.profileName}
+            </span>
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -148,6 +277,10 @@ export default function TodayPage() {
 
       {/* брифинг по блокам */}
       <div className="space-y-5">
+        <BriefingBlock code="ЗАР" title="Зарплата сегодня" icon={<TrendingUp size={16} />} delay={80}>
+          <SalaryTodayBriefing />
+        </BriefingBlock>
+
         <BriefingBlock code="ФИН" title="Деньги" icon={<Wallet size={16} />} delay={100}>
           {soon.length === 0 ? (
             <p className="text-[12px] text-mute">В ближайшие 3 дня платежей нет.</p>

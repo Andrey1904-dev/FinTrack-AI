@@ -96,6 +96,24 @@ export function SalaryCalendarTab({ profile, summary, workDays, rates, onSaveWor
 
   const days = summary?.days || [];
 
+  // Payout dates for this month based on profile settings
+  const payoutInfo = (() => {
+    if (!summary) return [];
+    const advDay = (profile.settings as { advance_day?: number })?.advance_day ?? 25;
+    const salDay = (profile.settings as { salary_day?: number })?.salary_day ?? 10;
+    const monthStr = summary.month;
+    const nextMonth = (() => {
+      const [y, m] = monthStr.split('-').map(Number);
+      const d = new Date(Date.UTC(y, m, 1));
+      d.setUTCMonth(d.getUTCMonth() + 1);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    })();
+    return [
+      { date: `${monthStr}-${String(advDay).padStart(2, '0')}`, label: 'Аванс', amount: Math.round(summary.monthTotalForecast / 2) },
+      { date: `${nextMonth}-${String(salDay).padStart(2, '0')}`, label: 'Зарплата', amount: summary.monthTotalForecast - Math.round(summary.monthTotalForecast / 2) },
+    ];
+  })();
+
   return (
     <div className="space-y-6">
       {/* Month metrics strip */}
@@ -105,6 +123,21 @@ export function SalaryCalendarTab({ profile, summary, workDays, rates, onSaveWor
         <Stat label="Впереди" value={`${summary?.remainingWorkDaysCount ?? 0} смен`} sub={`${summary?.plannedRemainingHours ?? 0} ч`} />
         <Stat label="Итоговый прогноз" value={money(summary?.monthTotalForecast ?? 0)} tone="accent" />
       </div>
+
+      {/* Payout dates */}
+      <Panel label="Зарплатный календарь · Выплаты" screw>
+        <div className="space-y-2">
+          {payoutInfo.map(pi => (
+            <div key={pi.date} className="flex items-center justify-between rounded-[2px] border border-line bg-panel/50 px-3 py-2 text-[12.5px]">
+              <span className="text-txt">
+                {pi.date} — {pi.label} · {pi.label === 'Аванс' ? 'ожидается' : 'ожидается окончательный расчёт'}
+              </span>
+              <span className="font-semibold text-amber">{money(pi.amount)}</span>
+            </div>
+          ))}
+          <p className="silk text-mute">Даты выплат берутся из настроек профиля (аванс { (profile.settings as { advance_day?: number })?.advance_day ?? 25 }-е, зарплата { (profile.settings as { salary_day?: number })?.salary_day ?? 10 }-е). Измените их в Настройках.</p>
+        </div>
+      </Panel>
 
       {/* Calendar Grid */}
       <Panel label={`Календарь смен · ${profile.name} (${profile.schedule_type})`} screw>
